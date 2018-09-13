@@ -125,7 +125,7 @@ class Irb120AccomodationControl {
 	}
 
 	geometry_msgs::Wrench Irb120AccomodationControl::transformWrench(geometry_msgs::Wrench wrench) {
-		//This is a useless func for now, 
+		//This is a useless func for now, USELESS!
 		//Can be used well when there is a transform between tool and sensor
 		updateFlangeTransform();
 		Eigen::VectorXf wrench_vector, transformed_wrench_vector;
@@ -218,6 +218,7 @@ class Irb120AccomodationControl {
 		//DO NOT USE UNTIL CHECKED
 		Eigen::VectorXf wrench_matrix(6); //since operations need to be performed
 		Eigen::VectorXf twist_matrix(6);
+		geometry_msgs::Twist twist_tool_frame;
 		wrench_matrix<<wrench.force.x, 
 						wrench.force.y,
 						wrench.force.z,
@@ -234,16 +235,17 @@ class Irb120AccomodationControl {
 									desired_point[5];
 								}
 		Eigen::VectorXf current_end_effector_pose(6), current_end_effector_velocity(6);
-		current_end_effector_pose<<0,0,0,0,0,0; //replace with fk from joint state
+		current_end_effector_pose<<0,0,0,0,0,0; //replace with fk from joint state //hopefully libegm provides this
 		current_end_effector_velocity<<0,0,0,0,0,0; //ideally to be calculated from Jacobian and joint vel
 		//make desired point, joint state.position and joint_state.velocity into eigen
-		twist_matrix = (dt *(wrench_matrix + k_virtual_ * (desired_end_effector_pose - current_end_effector_pose) + b_virtual_ * (current_end_effector_velocity))) * m_virtual_.inverse(); 
-		twist.linear.x = twist_matrix(0); //rethink the need to populate this message
-		twist.linear.y = twist_matrix(1);
-		twist.linear.z = twist_matrix(2);
-		twist.angular.x = twist_matrix(3);
-		twist.angular.y = twist_matrix(4);
-		twist.angular.z = twist_matrix(5);
+		twist_matrix = (dt *(wrench_matrix + k_virtual_ * (desired_end_effector_pose - current_end_effector_pose) - b_virtual_ * (current_end_effector_velocity))) * m_virtual_.inverse(); 
+		twist_tool_frame.linear.x = twist_matrix(0); //rethink the need to populate this message
+		twist_tool_frame.linear.y = twist_matrix(1);
+		twist_tool_frame.linear.z = twist_matrix(2);
+		twist_tool_frame.angular.x = twist_matrix(3);
+		twist_tool_frame.angular.y = twist_matrix(4);
+		twist_tool_frame.angular.z = twist_matrix(5);
+		twist = transformTwist(twist_tool_frame);
 	}
 
 
