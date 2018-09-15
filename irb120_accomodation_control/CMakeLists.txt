@@ -12,13 +12,15 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
 	tf2_ros
+  irb120_fk_ik
 )
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
 find_package(Eigen3 REQUIRED)
 find_package(cmake_modules REQUIRED)
-include_directories(${EIGEN3_INCLUDE_DIR})
+include_directories(${EIGEN3_INCLUDE_DIR}
+  irb120_fk_ik/include )
 add_definitions(${EIGEN_DEFINITIONS})
 
 ## Uncomment this if the package has a setup.py. This macro ensures
@@ -108,7 +110,7 @@ add_definitions(${EIGEN_DEFINITIONS})
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
   INCLUDE_DIRS include
-  LIBRARIES irb120_accomodation_control
+  LIBRARIES irb120_accomodation_control irb120_fk_ik
   CATKIN_DEPENDS geometry_msgs roscpp std_msgs
   DEPENDS system_lib
 )
@@ -128,6 +130,7 @@ include_directories(
 add_library(irb120_accomodation_control
    src/irb120_accomodation_control.cpp
 )
+
 
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries
@@ -157,11 +160,13 @@ add_executable(transform_test src/transform_test.cpp)
 target_link_libraries(publish_test 
    ${catkin_LIBRARIES}
 	irb120_accomodation_control
+  irb120_fk_ik
  )
 
  target_link_libraries(everything_test
   ${catkin_LIBRARIES}
   irb120_accomodation_control
+  irb120_fk_ik
   )
 
 target_link_libraries(subscribe_test 

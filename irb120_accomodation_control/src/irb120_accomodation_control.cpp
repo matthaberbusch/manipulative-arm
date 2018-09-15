@@ -51,6 +51,7 @@ class Irb120AccomodationControl {
 		initializePublishers(nh);
 		initializeSubscribers(nh);
 		tfListener_ = new tf2_ros::TransformListener(tfBuffer_);
+		//Irb120_fwd_solver irb120_fwd_solver;
 		
 		//Eigen::MatrixXf jacobian = Eigen::MatrixXf::Zero(6,6); //Need to initialize this// put it somewhere else?
 		warmUp();
@@ -144,12 +145,12 @@ class Irb120AccomodationControl {
 		origin = flange_transform_affine_.translation();
 		origin_hat = vectorHat(origin);
 		//This is from MLS book, may be implemented wrongly
-		Eigen::Matrix3f rotation_matrix = flange_transform_matrix_.block<3,3>(0,0);
-		wrench_transformation_matrix.block<3,3>(0,0) = flange_transform_affine_.linear().transpose();
-		wrench_transformation_matrix.block<3,3>(3,3) = flange_transform_affine_.linear().transpose();
-		wrench_transformation_matrix.block<3,3>(3,0) = flange_transform_affine_.linear().transpose() * origin_hat * -1;
-		wrench_transformation_matrix.block<3,3>(0,3)<<0,0,0,0,0,0,0,0,0;
-		transformed_wrench_vector = wrench_transformation_matrix.inverse() * wrench_vector;
+		
+		wrench_transformation_matrix.block<3,3>(0,0) = flange_transform_affine_.linear();
+		wrench_transformation_matrix.block<3,3>(3,3) = flange_transform_affine_.linear();
+		wrench_transformation_matrix.block<3,3>(0,3) = origin_hat * flange_transform_affine_.linear();
+		wrench_transformation_matrix = wrench_transformation_matrix.inverse();
+		transformed_wrench_vector = wrench_transformation_matrix * wrench_vector;
 		transformed_wrench.force.x = transformed_wrench_vector(0);
 		transformed_wrench.force.y = transformed_wrench_vector(1);
 		transformed_wrench.force.z = transformed_wrench_vector(2);
@@ -252,24 +253,25 @@ class Irb120AccomodationControl {
 	void Irb120AccomodationControl::findCartVelFromWrench(geometry_msgs::Wrench wrench, geometry_msgs::Twist &twist) {
 		//uses accomodation gain described in class
 		updateFlangeTransform(); // gets the latest transform value into a member variable called flange_transform_matrix_;
-		//geometry_msgs::Wrench transformed_wrench = transformWrench(wrench); //What a dumb thought this was. 
-		geometry_msgs::Twist twist_tool_frame;
-		Eigen::VectorXf wrench_matrix(6); //since operations need to be performed
-		Eigen::VectorXf twist_matrix_tool_frame(6), twist_matrix_world_frame(6);
-		wrench_matrix<<wrench.force.x, 
-						wrench.force.y,
-						wrench.force.z,
-						wrench.torque.x,
-						wrench.torque.y,
-						wrench.torque.z; 
-		twist_matrix_tool_frame = accomodation_gain_ * wrench_matrix; 
-		twist_tool_frame.linear.x = twist_matrix_tool_frame(0); //rethink the need to populate this message
-		twist_tool_frame.linear.y = twist_matrix_tool_frame(1);
-		twist_tool_frame.linear.z = twist_matrix_tool_frame(2);
-		twist_tool_frame.angular.x = twist_matrix_tool_frame(3);
-		twist_tool_frame.angular.y = twist_matrix_tool_frame(4);
-		twist_tool_frame.angular.z = twist_matrix_tool_frame(5);
-		twist = transformTwist(twist_tool_frame);
+		geometry_msgs::Wrench transformed_wrench = transformWrench(wrench);  
+		geometry_msgs::Twist twist_base_frame;
+		Eigen::VectorXf wrench_vector_base_frame(6); //since operations need to be performed
+		Eigen::VectorXf twist_vector_base_frame(6);
+		wrench_vector_base_frame<<transformed_wrench.force.x, 
+						transformed_wrench.force.y,
+						transformed_wrench.force.z,
+						transformed_wrench.torque.x,
+						transformed_wrench.torque.y,
+						transformed_wrench.torque.z;
+
+		twist_vector_base_frame = accomodation_gain_ * wrench_vector_base_frame; 
+		twist_base_frame.linear.x = twist_vector_base_frame(0); //rethink the need to populate this message
+		twist_base_frame.linear.y = twist_vector_base_frame(1);
+		twist_base_frame.linear.z = twist_vector_base_frame(2);
+		twist_base_frame.angular.x = twist_vector_base_frame(3);
+		twist_base_frame.angular.y = twist_vector_base_frame(4);
+		twist_base_frame.angular.z = twist_vector_base_frame(5);
+		twist = twist_base_frame;
 	}
 
 	geometry_msgs::Twist Irb120AccomodationControl::transformTwist(geometry_msgs::Twist twist_tool_frame) {
@@ -407,6 +409,10 @@ class Irb120AccomodationControl {
 		hat_of_vector(2,2) = 0;
 		return hat_of_vector;
 	}
+
+	//bool Irb120AccomodationControl::reachPose(geometry_msgs::Pose desired_pose) {
+
+	//}
 
 	void Irb120AccomodationControl::jointStateCallBack(const sensor_msgs::JointState &joint_state) {
 		g_joint_state_ = joint_state;

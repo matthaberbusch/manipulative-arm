@@ -1,5 +1,5 @@
-#ifndef BIN_INVENTORY_H_
-#define BIN_INVENTORY_H_
+#ifndef ACCOMMODATION_CONTROL_H_
+#define ACCOMMODATION_CONTROL_H_
 #include <ros/ros.h>
 #include <Eigen/Dense>
 #include <Eigen/Eigen>
@@ -11,6 +11,8 @@
 #include <irb120_accomodation_control/irb120_accomodation_control.h>
 #include <tf/transform_listener.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <irb120_fk_ik/irb120_kinematics.h>
+
 using namespace std;
 
 class Irb120AccomodationControl {

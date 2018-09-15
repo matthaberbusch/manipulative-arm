@@ -1,2 +1,2 @@
-Implement 'attractor point' behaviour with accomodation control.
-	Current status: accomodation control works without any 'goal' in mind. Robot is compliant to forces.
+Work with fk_ik library to calculate end effector pose
+
