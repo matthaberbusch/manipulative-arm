@@ -1,2 +1,2 @@
-Work with fk_ik library to calculate end effector pose
+Test gotoPose() method in a setting with obstacles
 
