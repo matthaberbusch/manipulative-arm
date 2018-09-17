@@ -13,6 +13,7 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
 	tf2_ros
   irb120_fk_ik
+ actionlib_msgs
 )
 
 ## System dependencies are found with CMake's conventions
@@ -163,7 +164,7 @@ target_link_libraries(publish_test
   irb120_fk_ik
  )
 
- target_link_libraries(everything_test
+target_link_libraries(everything_test
   ${catkin_LIBRARIES}
   irb120_accomodation_control
   irb120_fk_ik
@@ -172,11 +173,13 @@ target_link_libraries(publish_test
 target_link_libraries(subscribe_test 
    ${catkin_LIBRARIES}
 	irb120_accomodation_control
- )
+	irb120_fk_ik 
+)
 
 target_link_libraries(transform_test
 	${catkin_LIBRARIES}
 	irb120_accomodation_control
+	irb120_fk_ik
  )
 
 #############

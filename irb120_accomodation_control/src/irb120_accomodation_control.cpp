@@ -51,7 +51,7 @@ class Irb120AccomodationControl {
 		initializePublishers(nh);
 		initializeSubscribers(nh);
 		tfListener_ = new tf2_ros::TransformListener(tfBuffer_);
-		//Irb120_fwd_solver irb120_fwd_solver;
+		//irb120_fwd_solver_ = new Irb120_fwd_solver;
 		
 		//Eigen::MatrixXf jacobian = Eigen::MatrixXf::Zero(6,6); //Need to initialize this// put it somewhere else?
 		warmUp();
@@ -212,7 +212,7 @@ class Irb120AccomodationControl {
 
 	}
 
-	
+	// trash
 	void Irb120AccomodationControl::calculateTwistFromWrench(geometry_msgs::Wrench wrench, sensor_msgs::JointState joint_state, vector<float> desired_point, geometry_msgs::Twist &twist) {
 		//calculates accomodation gain from napkin math, need confirmation	
 		//Do not use until irb120 fk are implemented
@@ -248,8 +248,9 @@ class Irb120AccomodationControl {
 		twist_tool_frame.angular.z = twist_matrix(5);
 		twist = transformTwist(twist_tool_frame);
 	}
+	
 
-
+	//trash
 	void Irb120AccomodationControl::findCartVelFromWrench(geometry_msgs::Wrench wrench, geometry_msgs::Twist &twist) {
 		//uses accomodation gain described in class
 		updateFlangeTransform(); // gets the latest transform value into a member variable called flange_transform_matrix_;
@@ -273,7 +274,8 @@ class Irb120AccomodationControl {
 		twist_base_frame.angular.z = twist_vector_base_frame(5);
 		twist = twist_base_frame;
 	}
-
+	
+	//trash	
 	geometry_msgs::Twist Irb120AccomodationControl::transformTwist(geometry_msgs::Twist twist_tool_frame) {
 		updateFlangeTransform();
 		geometry_msgs::Twist twist_world_frame;
@@ -302,7 +304,8 @@ class Irb120AccomodationControl {
 		twist_world_frame.angular.x = twist_vector_world_frame(5);
 		return twist_world_frame;
 	}
-
+	
+	// trash
 	void Irb120AccomodationControl::findCartVelFromWrench (geometry_msgs::Wrench wrench, geometry_msgs::Twist &twist,
 														 Eigen::MatrixXf given_accomodation_gain) {
 		//for user defined accomodation gain
@@ -322,7 +325,8 @@ class Irb120AccomodationControl {
 		twist.angular.y = twist_matrix(4);
 		twist.angular.z = twist_matrix(5);	
 	}
-
+	
+	// trash
 	void Irb120AccomodationControl::findJointVelFromCartVel (geometry_msgs::Twist twist, sensor_msgs::JointState joint_states, Eigen::MatrixXf given_jacobian, vector<float> &joint_vel) {
 		//takes cart vel input in twist form, returns a 6 element vector of joint vel
 		//User defined jacobian
@@ -410,9 +414,83 @@ class Irb120AccomodationControl {
 		return hat_of_vector;
 	}
 
-	//bool Irb120AccomodationControl::reachPose(geometry_msgs::Pose desired_pose) {
 
-	//}
+	void Irb120AccomodationControl::gotoPose(geometry_msgs::Pose desired_pose) {
+		//needs desired pose to be very close to current pose as there is no feedback. Must use only after developing fine trajectory
+		//todo, maybe clean up and encapsulate?
+			sensor_msgs::JointState current_joint_state;
+			geometry_msgs::Wrench current_ft_value, transformed_ft_value;
+			geometry_msgs::Twist desired_twist;
+			vector<float> desired_joint_vel;
+			current_joint_state = getJointState();
+			current_ft_value = getFTSensorValue();
+			geometry_msgs::Pose current_pose;
+			Eigen::VectorXd joint_angles = Eigen::VectorXd::Zero(6); 
+			Eigen::Affine3d fwd_kin;
+			Eigen::MatrixXf f_motion = Eigen::MatrixXf::Zero(6,1);
+			Eigen::MatrixXf f_sensor = Eigen::MatrixXf::Zero(6,1);
+			Eigen::MatrixXf twist_vector = Eigen::MatrixXf::Zero(6,1);
+			for(int i = 0; i < 6; i++) joint_angles(1) = current_joint_state.position[i];
+			
+			fwd_kin = irb120_fwd_solver_->fwd_kin_solve(joint_angles);
+			Eigen::Vector3d origin = fwd_kin.translation();
+			Eigen::Matrix3d rotation = fwd_kin.linear();
+			Eigen::Quaterniond quat(rotation); 
+			current_pose.position.x = origin(0);
+			current_pose.position.y = origin(1);
+			current_pose.position.z = origin(2);
+			current_pose.orientation.w = quat.w();
+			current_pose.orientation.x = quat.x();
+			current_pose.orientation.y = quat.y();
+			current_pose.orientation.z = quat.z(); //probably unnecessary  
+
+			Eigen::VectorXf desiredXYZRPY = Eigen::VectorXf::Zero(6);
+			Eigen::VectorXf currentXYZRPY = Eigen::VectorXf::Zero(6);
+
+			desiredXYZRPY(0) = desired_pose.position.x;
+			desiredXYZRPY(1) = desired_pose.position.y;
+			desiredXYZRPY(2) = desired_pose.position.z;
+			desiredXYZRPY(3) = atan2( 2.0 * (desired_pose.orientation.w * desired_pose.orientation.x + desired_pose.orientation.y * desired_pose.orientation.z), 
+									1.0 - 2.0 * (desired_pose.orientation.x * desired_pose.orientation.x + desired_pose.orientation.y * desired_pose.orientation.y ));
+			desiredXYZRPY(4) = asin(2.0 * (desired_pose.orientation.w * desired_pose.orientation. y - desired_pose.orientation.z * desired_pose.orientation.x));
+			desiredXYZRPY(5) = atan2(2.0 * (desired_pose.orientation.w * desired_pose.orientation.z + desired_pose.orientation.x * desired_pose.orientation.y),
+									1.0 - 2.0 * (desired_pose.orientation.y * desired_pose.orientation.y + desired_pose.orientation.z * desired_pose.orientation.z));
+
+			currentXYZRPY(0) = current_pose.position.x;
+			currentXYZRPY(1) = current_pose.position.y;
+			currentXYZRPY(2) = current_pose.position.z;
+			currentXYZRPY(3) = atan2( 2.0 * (current_pose.orientation.w * current_pose.orientation.x + current_pose.orientation.y * current_pose.orientation.z), 
+									1.0 - 2.0 * (current_pose.orientation.x * current_pose.orientation.x + current_pose.orientation.y * current_pose.orientation.y ));
+			currentXYZRPY(4) = asin(2.0 * (current_pose.orientation.w * current_pose.orientation. y - current_pose.orientation.z * current_pose.orientation.x));
+			currentXYZRPY(5) = atan2(2.0 * (current_pose.orientation.w * current_pose.orientation.z + current_pose.orientation.x * current_pose.orientation.y),
+									1.0 - 2.0 * (current_pose.orientation.y * current_pose.orientation.y + current_pose.orientation.z * current_pose.orientation.z));
+
+			//phew
+			transformed_ft_value = transformWrench(current_ft_value);
+			f_motion = stiffness_ * (desiredXYZRPY - currentXYZRPY);
+			f_sensor<<transformed_ft_value.force.x,
+					transformed_ft_value.force.y,
+					transformed_ft_value.force.z,
+					transformed_ft_value.torque.x,
+					transformed_ft_value.torque.y,
+					transformed_ft_value.torque.z;
+
+
+			twist_vector = accomodation_gain_ * (f_motion + f_sensor);
+
+			desired_twist.linear.x = twist_vector(0);
+			desired_twist.linear.y = twist_vector(1);
+			desired_twist.linear.z = twist_vector(2);
+			desired_twist.angular.x = twist_vector(3);
+			desired_twist.angular.y = twist_vector(4);
+			desired_twist.angular.z = twist_vector(5);
+
+			findJointVelFromCartVel(desired_twist, current_joint_state, desired_joint_vel);
+			commandJointPosFromJointVel(desired_joint_vel, current_joint_state);
+
+
+
+	}
 
 	void Irb120AccomodationControl::jointStateCallBack(const sensor_msgs::JointState &joint_state) {
 		g_joint_state_ = joint_state;
@@ -421,7 +499,7 @@ class Irb120AccomodationControl {
 	void Irb120AccomodationControl::ftCallBack(const geometry_msgs::WrenchStamped &wrench_stamped) {
 		g_ft_value_ = wrench_stamped.wrench;
 	}
-
+// trash
 	void Irb120AccomodationControl::setKvirtual(Eigen::MatrixXf k_virtual) {
 		k_virtual_ = k_virtual;
 	}
@@ -444,9 +522,10 @@ class Irb120AccomodationControl {
 
 	Eigen::MatrixXf Irb120AccomodationControl::getBvirtual(){
 		return b_virtual_;
-	}
+	} 
+//trash ends	
 	sensor_msgs::JointState Irb120AccomodationControl::getJointState() {
-		
+		ros::spinOnce();
 		return g_joint_state_;
 	}
 

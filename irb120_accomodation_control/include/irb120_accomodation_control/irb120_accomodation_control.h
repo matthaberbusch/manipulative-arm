@@ -1,6 +1,7 @@
 #ifndef ACCOMMODATION_CONTROL_H_
 #define ACCOMMODATION_CONTROL_H_
 #include <ros/ros.h>
+#include <math.h>
 #include <Eigen/Dense>
 #include <Eigen/Eigen>
 #include <geometry_msgs/Wrench.h>
@@ -17,9 +18,7 @@ using namespace std;
 
 class Irb120AccomodationControl {
 	public:
-	void findCartVelFromWrench (geometry_msgs::Wrench wrench, geometry_msgs::Twist &twist);
-	void findCartVelFromWrench (geometry_msgs::Wrench wrench, geometry_msgs::Twist &twist, Eigen::MatrixXf accomodation_gain);
-	void findJointVelFromCartVel (geometry_msgs::Twist twist,sensor_msgs::JointState, Eigen::MatrixXf jacobian, vector<float> &joint_vel);
+	void gotoPose(geometry_msgs::Pose desired_pose);
 	void findJointVelFromCartVel (geometry_msgs::Twist twist, sensor_msgs::JointState, vector<float> &joint_vel);
 	void publishJointAngles(vector<float> joint_pos);
 	void publishJointAngles(vector<std_msgs::Float64> joint_pos);
@@ -29,7 +28,11 @@ class Irb120AccomodationControl {
 	geometry_msgs::Wrench getFTSensorValue();
 	void commandJointPosFromJointVel(vector<float> joint_vel, sensor_msgs::JointState joint);
 	Irb120AccomodationControl(ros::NodeHandle &nh);
+	//below are trash
 	Eigen::MatrixXf getJacobian();
+	void findCartVelFromWrench (geometry_msgs::Wrench wrench, geometry_msgs::Twist &twist);
+	void findCartVelFromWrench (geometry_msgs::Wrench wrench, geometry_msgs::Twist &twist, Eigen::MatrixXf accomodation_gain);
+	void findJointVelFromCartVel (geometry_msgs::Twist twist,sensor_msgs::JointState, Eigen::MatrixXf jacobian, vector<float> &joint_vel);
 	void setBvirtual(Eigen::MatrixXf b_virtual);
 	void setMvirtual(Eigen::MatrixXf m_virtual);
 	void setKvirtual(Eigen::MatrixXf k_virtual);
@@ -41,8 +44,11 @@ class Irb120AccomodationControl {
 	geometry_msgs::Wrench getTransformedWrench();
 	Eigen::Affine3f getAffine_test();
 	private:
+
+	Irb120_fwd_solver* irb120_fwd_solver_;
 	tf2_ros::Buffer tfBuffer_;
 	tf2_ros::TransformListener* tfListener_;
+	geometry_msgs::Pose getPoseFromAffine(Eigen::Affine3d aff);
 	void warmUp();
 	void initializeJacobian(sensor_msgs::JointState joint_states);
 	void initializeSubscribers(ros::NodeHandle &nh);
@@ -60,6 +66,7 @@ class Irb120AccomodationControl {
 	sensor_msgs::JointState g_joint_state_;
 	geometry_msgs::Wrench g_ft_value_;
 	Eigen::MatrixXf accomodation_gain_ = Eigen::MatrixXf::Identity(6,6);
+	Eigen::MatrixXf stiffness_ = Eigen::MatrixXf::Identity(6,6);
 	Eigen::MatrixXf jacobian_ = Eigen::MatrixXf::Zero(6,6); //Need to initialize this
 	Eigen::MatrixXf jacobian_inverse_ = jacobian_.inverse();
 	Eigen::MatrixXf k_virtual_ = Eigen::MatrixXf::Identity(6,6);
