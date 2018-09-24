@@ -146,6 +146,7 @@ add_executable(publish_test src/publish_test.cpp)
 add_executable(subscribe_test src/subscribe_test.cpp)
 add_executable(everything_test src/everything_test.cpp)
 add_executable(transform_test src/transform_test.cpp)
+add_executable(compliant_touch src/compliant_touch.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -181,6 +182,13 @@ target_link_libraries(transform_test
 	irb120_accomodation_control
 	irb120_fk_ik
  )
+
+target_link_libraries(compliant_touch
+  ${catkin_LIBRARIES}
+  irb120_accomodation_control
+  irb120_fk_ik
+ )
+
 
 #############
 ## Install ##
