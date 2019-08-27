@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.3)
 project(irb120_accomodation_control)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
-# add_compile_options(-std=c++11)
+add_compile_options(-std=c++11)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -14,15 +14,19 @@ find_package(catkin REQUIRED COMPONENTS
 	tf2_ros
   irb120_fk_ik
  actionlib_msgs
+  abb_libegm
+  
 )
 
 ## System dependencies are found with CMake's conventions
-# find_package(Boost REQUIRED COMPONENTS system)
+find_package(Boost REQUIRED COMPONENTS system)
 find_package(Eigen3 REQUIRED)
 find_package(cmake_modules REQUIRED)
 include_directories(${EIGEN3_INCLUDE_DIR}
-  irb120_fk_ik/include )
+  irb120_fk_ik/include
+	abb_libegm/include )
 add_definitions(${EIGEN_DEFINITIONS})
+
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -61,24 +65,24 @@ add_definitions(${EIGEN_DEFINITIONS})
 # )
 
 ## Generate services in the 'srv' folder
-# add_service_files(
-#   FILES
-#   Service1.srv
+add_service_files(
+  FILES
+   freeze_service.srv
 #   Service2.srv
-# )
+ )
 
 ## Generate actions in the 'action' folder
-# add_action_files(
-#   FILES
-#   Action1.action
+add_action_files(
+   
+   FILES Accommodation.action
 #   Action2.action
-# )
+ )
 
 ## Generate added messages and services with any dependencies listed here
-# generate_messages(
-#   DEPENDENCIES
-#   geometry_msgs#   std_msgs
-# )
+generate_messages(
+  DEPENDENCIES
+   geometry_msgs   std_msgs   actionlib_msgs 
+ )
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##
@@ -111,9 +115,10 @@ add_definitions(${EIGEN_DEFINITIONS})
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
   INCLUDE_DIRS include
-  LIBRARIES irb120_accomodation_control irb120_fk_ik
+  LIBRARIES irb120_accomodation_control irb120_fk_ik abb_libegm
   CATKIN_DEPENDS geometry_msgs roscpp std_msgs
   DEPENDS system_lib
+  CATKIN_DEPENDS actionlib_msgs
 )
 
 ###########
@@ -146,7 +151,25 @@ add_executable(publish_test src/publish_test.cpp)
 add_executable(subscribe_test src/subscribe_test.cpp)
 add_executable(everything_test src/everything_test.cpp)
 add_executable(transform_test src/transform_test.cpp)
+add_executable(libegm_test src/libegm_test.cpp)
+add_executable(networktest src/networktest.cpp)
+add_executable(custom_egm_test src/custom_egm_test.cpp)
+add_executable(egm_controller_update_rate_test src/egm_controller_update_rate_test.cpp)
+
 add_executable(compliant_touch src/compliant_touch.cpp)
+add_executable(jacobian_test src/jacobian_test.cpp)
+add_executable(control_test src/control_test.cpp)
+add_executable(cartesian_control_test src/cartesian_control_test.cpp)
+add_executable(accommodation_server src/accommodation_server.cpp)
+add_executable(accommodation_controller src/accommodation_controller.cpp)
+add_executable(hc_acc_interface src/hand_controller_accommodation_interface.cpp)
+add_executable(accommodation_controller_stand_alone src/accommodation_controller_stand_alone.cpp)
+add_executable(accommodation_controller_move_until_touch_stand_alone src/accommodation_controller_move_until_touch_stand_alone.cpp)
+add_executable(score_calculator src/score_calculator.cpp)
+add_executable(accommodation_controller_with_rcc src/accommodation_controller_with_rcc.cpp)
+add_executable(accommodation_controller_restricted_position src/accommodation_controller_restricted_position.cpp)
+add_executable(accommodation_controller_with_bumpless_transitions src/accommodation_controller_with_bumpless_transitions.cpp)
+
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -165,6 +188,26 @@ target_link_libraries(publish_test
   irb120_fk_ik
  )
 
+target_link_libraries(networktest 
+   ${catkin_LIBRARIES}
+	irb120_accomodation_control
+  irb120_fk_ik
+ )
+
+target_link_libraries(custom_egm_test
+	${catkin_LIBRARIES}
+	irb120_accomodation_control
+  irb120_fk_ik
+ )
+
+ target_link_libraries(egm_controller_update_rate_test
+  ${catkin_LIBRARIES}
+  irb120_accomodation_control
+  irb120_fk_ik
+ )
+
+
+
 target_link_libraries(everything_test
   ${catkin_LIBRARIES}
   irb120_accomodation_control
@@ -181,6 +224,14 @@ target_link_libraries(transform_test
 	${catkin_LIBRARIES}
 	irb120_accomodation_control
 	irb120_fk_ik
+	abb_libegm
+ )
+
+target_link_libraries(libegm_test
+	${catkin_LIBRARIES}
+	irb120_accomodation_control
+	irb120_fk_ik
+	abb_libegm
  )
 
 target_link_libraries(compliant_touch
@@ -189,7 +240,68 @@ target_link_libraries(compliant_touch
   irb120_fk_ik
  )
 
+target_link_libraries(jacobian_test
+  ${catkin_LIBRARIES}
+  irb120_accomodation_control
+  irb120_fk_ik
+ )
 
+target_link_libraries(control_test
+  ${catkin_LIBRARIES}
+  irb120_accomodation_control
+  irb120_fk_ik)
+
+target_link_libraries(accommodation_controller
+  ${catkin_LIBRARIES}
+  irb120_accomodation_control
+  irb120_fk_ik
+ )
+
+ target_link_libraries(cartesian_control_test
+  ${catkin_LIBRARIES}
+  irb120_accomodation_control
+  irb120_fk_ik
+ )
+ target_link_libraries(accommodation_server
+ ${catkin_LIBRARIES}
+  irb120_accomodation_control
+  irb120_fk_ik
+ )
+  target_link_libraries(accommodation_controller_stand_alone
+ ${catkin_LIBRARIES}
+  irb120_accomodation_control
+  irb120_fk_ik
+ )
+  target_link_libraries(accommodation_controller_move_until_touch_stand_alone
+ ${catkin_LIBRARIES}
+  irb120_accomodation_control
+  irb120_fk_ik
+ )
+ target_link_libraries(hc_acc_interface
+ ${catkin_LIBRARIES}
+  irb120_accomodation_control
+  irb120_fk_ik
+ )
+ target_link_libraries(score_calculator
+ ${catkin_LIBRARIES}
+  irb120_accomodation_control
+  irb120_fk_ik
+ )
+ target_link_libraries(accommodation_controller_with_rcc
+  ${catkin_LIBRARIES}
+  irb120_accomodation_control
+  irb120_fk_ik
+ )
+target_link_libraries(accommodation_controller_restricted_position
+  ${catkin_LIBRARIES}
+  irb120_accomodation_control
+  irb120_fk_ik
+ )
+ target_link_libraries(accommodation_controller_with_bumpless_transitions
+  ${catkin_LIBRARIES}
+  irb120_accomodation_control
+  irb120_fk_ik
+ )
 #############
 ## Install ##
 #############

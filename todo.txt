@@ -1,2 +1,1 @@
-Test gotoPose() method in a setting with obstacles
-
+Look into angular jacobian wrt axis-angle representation of robot orientation

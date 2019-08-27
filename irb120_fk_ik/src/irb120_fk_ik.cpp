@@ -45,8 +45,8 @@ Eigen::Matrix4d compute_A_of_DH(int i, double q_abb) {
     double a = DH_a_params[i];
     double d = DH_d_params[i];
     double alpha = DH_alpha_params[i];
-    double q = q_abb + DH_q_offsets[i];
-
+    //double q = q_abb + DH_q_offsets[i];
+    double q = q_abb;
     A = Eigen::Matrix4d::Identity();
     R = Eigen::Matrix3d::Identity();
     //ROS_INFO("compute_A_of_DH: a,d,alpha,q = %f, %f %f %f",a,d,alpha,q);
@@ -84,7 +84,45 @@ Eigen::MatrixXd Irb120_fwd_solver::jacobian(const Eigen::VectorXd& q_vec) {
   return jacobian;
 }
 
-/*  IN CASE WANT JACOBIAN LATER...
+//Need to change function name, jacobian2 is UGLY
+Eigen::MatrixXd Irb120_fwd_solver::jacobian2(const Eigen::VectorXd& q_vec) {
+    Eigen::MatrixXd J = Eigen::MatrixXd::Zero(6,6);
+    Eigen::MatrixXd J_ang = Eigen::MatrixXd::Zero(3,6);
+    Eigen::MatrixXd J_trans = Eigen::MatrixXd::Zero(3,6);
+    Eigen::MatrixXd zvecs = Eigen::MatrixXd::Zero(3,6);
+    Eigen::MatrixXd rvecs = Eigen::MatrixXd::Zero(3,6);
+    //Eigen::Matrix4d A_sensor_flange = compute_A_of_DH(0, 0.05,0.0, - M_PI/2);
+    //need to call fwd_kin_solve here
+    fwd_kin_solve_(q_vec);
+    Eigen::Matrix4d A_flange = A_mat_products[5];
+    Eigen::MatrixXd O_flange = A_flange.block<3,1>(0,3); // Origin of end effector
+    Eigen::MatrixXd Ai;
+    Eigen::MatrixXd zvec, rvec; // zvec will contain z axis of i'th frame, rvec will contain rotation to origin of i'th frame
+    Eigen::Vector3d t1, t2; //for vector cross product
+    t1<<0,0,1;
+    t2 = O_flange;
+    J_trans.block<3,1>(0,0) = t1.cross(t2);
+    J_ang.block<3,1>(0,0)<<0,0,1;
+    for(int i = 1; i < 6; i++) {
+        Ai = A_mat_products[i-1]; // considering A_mat_products has already been populated, hence need to call fwd_kin_solve_ 
+        zvec = Ai.block<3,1>(0,2); //Extracting z component from transformation matrix (rotation matrix inside transformation matrix)
+        
+        rvec = O_flange - Ai.block<3, 1>(0, 3); //%vector from origin of i'th frame to palm 
+        
+        J_ang.block<3, 1>(0, i) = zvec;
+
+        t1 = zvec;
+        t2 = rvec;
+        J_trans.block<3, 1>(0, i) = t1.cross(t2);
+    }
+    
+    J.block<3,6>(0,0) = J_trans;
+    J.block<3,6>(3,0) = J_ang;
+    return J;
+
+}
+
+/* IN CASE WANT JACOBIAN LATER...
 Eigen::MatrixXd irb120_hand_fwd_solver::get_Jacobian(const Vectorq6x1& q_vec) {
     solve(q_vec);
     Eigen::MatrixXd J = Eigen::MatrixXd::Zero(6, 6);
@@ -155,7 +193,7 @@ Eigen::Matrix4d Irb120_fwd_solver::fwd_kin_solve_(const Vectorq6x1& q_vec) {
     Eigen::Vector3d p;
     for (int i = 0; i < 6; i++) {
         //A_i_iminusi = compute_A_of_DH(DH_a_params[i],DH_d_params[i],DH_alpha_params[i], q_vec[i] + DH_q_offsets[i] );
-        A_i_iminusi = compute_A_of_DH(i, q_vec[i]);
+        A_i_iminusi = compute_A_of_DH(i, q_vec[i] + DH_q_offsets[i] );
         A_mats[i] = A_i_iminusi;
         //std::cout << "A_mats[" << i << "]:" << std::endl;
         //std::cout << A_mats[i] << std::endl;
@@ -259,8 +297,8 @@ bool Irb120_IK_solver::compute_q123_solns(Eigen::Affine3d const& desired_hand_po
     double q1b = q1a + M_PI; // given q1, q1+pi is also a soln
     Eigen::Matrix4d A1a, A1b;
     //compute_A_of_DH(double a,double d,double q, double alpha); use q_vec(i) + DH_q_offsets(i)
-    A1a = compute_A_of_DH(0, q1a); //compute_A_of_DH(DH_a_params[0],DH_d_params[0],DH_alpha_params[0], q1a+ DH_q_offsets[0] );
-    A1b = compute_A_of_DH(0, q1b); //compute_A_of_DH(DH_a_params[0],DH_d_params[0],DH_alpha_params[0], q1b+ DH_q_offsets[0] );    
+    A1a = compute_A_of_DH(0, q1a ); //compute_A_of_DH(DH_a_params[0],DH_d_params[0],DH_alpha_params[0], q1a+ DH_q_offsets[0] );
+    A1b = compute_A_of_DH(0, q1b ); //compute_A_of_DH(DH_a_params[0],DH_d_params[0],DH_alpha_params[0], q1b+ DH_q_offsets[0] );    
     double q2a_solns[2];
     double q2b_solns[2];
 

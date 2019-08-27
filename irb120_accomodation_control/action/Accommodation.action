@@ -1,0 +1,8 @@
+#goal definition
+geometry_msgs/Pose des_pose
+---
+#result
+bool done
+---
+#feedback
+geometry_msgs/Pose curr_pose

@@ -1,0 +1,31 @@
+Steps:
+1. Turn robot on, turn the key to manual mode, jog the robot and line each joint up with its zero marker (Information about this coming up, for now, if Im not in the lab, and the robot is turned off, assume that the joints are aligned with their zero markers)
+2. Go to Calibration in the drop down menu by tapping on the icon in the top left corner of the flex pendant. Tap on "Update revolution counters" and keep tapping "yes" or "acknowledge" to every message that shows up. Ensure that all the joints' checkboxes are ticket in the next screens. 
+3. Once revolution counters have been updated, turn key to change robot mode to automatic, and turn motors on using the white button below the key. This should open up a 'production window' where you can see some code written in green. Otherwise, use the topleft drop down menu to access 'production window'. 
+4. In the production window, tap 'Move PP to main', then 'yes'. After this, press the button with a triangle icon to run the program. 
+5. After this, you could be able to communicate with the robot using either custom_egm_test or networktest. ( These nodes would not work if the robot is not 'running').
+6. Use rosrun robotiq_ft_sensor rq_sensor to run the sensor driver.
+7. Rostopic echo should now show you 4 topics, 2 from the sensor, and 2 related to the robot. 
+8. If the robot doesnt recieve correct data within 50seconds, it stops running. Just "move pp to main" and press run again when this happens. The 50 second timeout could be increased but it seemed like a good value from troubleshooting. I could increase it more, if necessary. 
+
+
+
+How to use:
+1. Robot Interface: 
+For now, the interface uses the node custom_egm_test (rosrun irb12_acc-- custom_egm_test). While this node provides full functionality, it still needs improvement. It initializes a publisher and subscriber of message type sensor_msgs::JointState. Publish to the topic "/abb120_joint_angle_command" to write to the robot controller. Subscribe to the topic "abb120_joint_state" to read from the robot controller.
+
+2. Sensor Interface:
+The sensor driver node can be run by "rosrun robotiq_ft_sensor rq_sensor". This node publishes to two topics: "/robotiq_ft_sensor_wrench" and "/robotiq_ft_sensor_values". The former topic provides a message type that we are accustomed to. The latter topic provides no obvious advantage, so its better ignored. 
+
+3.  Troubleshooting:
+	1. The robot controller is either moody or theres a missing step in my approach (working on it). If the node "custom_egm_test" gets stuck in a loop where it keeps printing "waiting for message" and "no message recieved", ensure the following:
+	a. The ip address of your computer should be "192.168.125.3" on the connection to the robot. ( Need to figure out the right lingo for this)
+	b. Try running "rosrun irb120_accomodation_control networktest" and see if it prints messages in affirmative. 
+	c. Otherwise, the port number is likely to have changed. The new port number can be found by running "sudo tcpdump -n udp port 6510". The other port number ( not 6510) must be put into the robot_port_number variable in networktest (and compiled). Running network test after this should show that messages are being sent and recieved.
+	2. The F/T sensor could (and for the first attempt, definitely would) get stuck in a loop of "Waiting for sensor connection". When this happens, input this command to the terminal "sudo usermod -a -G dialout <username>" and reboot the system.
+
+	Commands:
+
+	rostopic echo -b test08.bag -p /robotiq_ft_wrench > wrench.txt
+	rosbag record -O subset /abb120_joint_angle_command /robotiq_ft_wrench /K_value /V_value
+

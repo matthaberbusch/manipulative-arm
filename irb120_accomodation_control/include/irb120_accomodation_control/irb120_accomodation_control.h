@@ -11,7 +11,7 @@
 #include <std_msgs/Float64.h>
 #include <irb120_accomodation_control/irb120_accomodation_control.h>
 #include <tf/transform_listener.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+//#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <irb120_fk_ik/irb120_kinematics.h>
 
 using namespace std;
@@ -43,6 +43,7 @@ class Irb120AccomodationControl {
 	geometry_msgs::TransformStamped getFlangeTransform();
 	geometry_msgs::Wrench getTransformedWrench();
 	Eigen::Affine3f getAffine_test();
+	void accomodate();
 	private:
 
 	Irb120_fwd_solver* irb120_fwd_solver_;

@@ -1,0 +1,9 @@
+<launch>
+
+<!-- rosbag record TODO IS THIS RIGHT?-->
+<node pkg="rosbag" type="record" name="rosbag" args="record -a -O where_are_you" />
+
+<!-- rosrun irb120_accomodation_control score_calculator -->
+<node pkg="irb120_accomodation_control" type="score_calculator" name="score_calculator" />
+
+</launch>
