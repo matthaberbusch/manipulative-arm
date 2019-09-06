@@ -52,7 +52,10 @@ int main(int argc, char** argv) {
 
     // Declare constants
     // TARGET_DISTANCE will change with user input
-    double PULL_DISTANCE = 0.02, KEEP_CONTACT_DISTANCE = 0.005, DT = 0.01, FORCE_TRESHOLD = 40, TARGET_DISTANCE = 0.05; // Pull distance was 0.01, force_threshold was 13!
+    double PULL_DISTANCE = 0.025, KEEP_CONTACT_DISTANCE = 0.005, DT = 0.01, FORCE_TRESHOLD = 25, TARGET_DISTANCE = 0.05; // Pull distance was 0.01, force_threshold was 13!
+    double RUN_TIME = 30;
+    double total_number_of_loops = RUN_TIME / DT;
+    double loops_so_far = 0;
 
     // ROS: for loop rate
     ros::Rate naptime(1/DT);
@@ -64,8 +67,16 @@ int main(int argc, char** argv) {
     // The end effector pose (current_pose) and force torque data (ft_in_robot_frame) are global variables.
 
     // Get user input
-    cout << "Enter a distance to move in meters: ";
-    cin >> TARGET_DISTANCE;
+    // cout << "Enter a distance to move in meters: ";
+    // cin >> TARGET_DISTANCE;
+    
+    // Get parameter passed in through 
+    nh.param("/simple_move_until_touch/target_distance", TARGET_DISTANCE, 0.03);
+    
+    // clear parameter from server 
+    nh.deleteParam("/simple_move_until_touch/target_distance"); 
+
+    ROS_INFO("Output from parameter for target_distance; %f", TARGET_DISTANCE);
 
     // ROS: Wait until we have position data. Our default position is 0.
     while(current_pose.position.x == 0) ros::spinOnce();
@@ -81,7 +92,7 @@ int main(int argc, char** argv) {
     // Begin loop
     // Assuming we're always going in the positive x direction.
     // While we haven't touched anything and haven't reached our target
-    while((abs(ft_in_robot_frame.force.x) < FORCE_TRESHOLD) && (((abs(current_pose.position.x) < target_position) && (TARGET_DISTANCE >= 0)) || ((abs(current_pose.position.x) >= target_position) && (TARGET_DISTANCE < 0)) )  ) {
+    while( (loops_so_far <= total_number_of_loops) && (abs(ft_in_robot_frame.force.x) < FORCE_TRESHOLD) && (((abs(current_pose.position.x) < target_position) && (TARGET_DISTANCE >= 0)) || ((abs(current_pose.position.x) >= target_position) && (TARGET_DISTANCE < 0))) ) {
         // ROS: for communication between programs
         ros::spinOnce();
 
@@ -104,6 +115,8 @@ int main(int argc, char** argv) {
         // ROS: for communication between programs
         virtual_attractor_publisher.publish(virtual_attractor);
         naptime.sleep();
+
+        loops_so_far = loops_so_far + 1;
 
         // Print current position
         cout<<"Current position: "<<endl<<abs(current_pose.position.x)<<endl;
@@ -138,7 +151,18 @@ int main(int argc, char** argv) {
         // Put the virtual attractor at the end effector
         virtual_attractor.pose = current_pose;
     }
-         
+
+    //If we've timed out
+    if (loops_so_far > total_number_of_loops){
+        cout<<"Timed out"<<endl;
+
+        // ROS: for communication between programs
+        ros::spinOnce();
+
+        // Put the virtual attractor at the end effector
+        virtual_attractor.pose = current_pose;
+    }
+
     // ROS: for communication between programs
     virtual_attractor_publisher.publish(virtual_attractor);
     naptime.sleep();

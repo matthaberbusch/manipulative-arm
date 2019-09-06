@@ -47,8 +47,23 @@ int main(int argc, char** argv) {
     naptime.sleep();
 
     // Calculate the run time
-    cout << "Enter a run time in seconds: ";
-    cin >> RUN_TIME;
+    // cout << "Enter a run time in seconds: ";
+    // cin >> RUN_TIME;
+
+    // Replace the runtime with a value from parameters
+    // ros::NodeHandle n("~"); // refer to the global path to the local parameters
+
+    // get parameter from server, passed by command line (if nothing passed in, results in default)
+    // find topic of the param pushed
+    nh.param("/force_moment_accommodation/run_time", RUN_TIME, 3.0); 
+
+    
+    // clear parameter from server 
+    nh.deleteParam("/force_moment_accommodation/run_time"); 
+    
+    ROS_INFO("Output from parameter for runtime; %f", RUN_TIME);
+
+
     double total_number_of_loops = RUN_TIME / DT;
     double loops_so_far = 0;
 

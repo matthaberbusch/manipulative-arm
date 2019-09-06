@@ -1,0 +1,41 @@
+How to Run the Robot
+Updated 8/27/19
+
+IRB 120:
+
+1. Turn the power switch on back of the robot controller to ON.
+2. Turn the key to manual mode (hand icon).
+3. Click the menu in the upper left corner of the touch pendant screen, choose Jogging.
+4. Jog each joint to make the L-shaped 0 position. Ignore the display angles. 
+5. Click the menu again and choose Calibrate.
+6. [Click through  all the errors and calibrate the robot]
+7. Turn the key to automatic mode (circles icon).
+8. Click the menu again and choose Production Window.
+9. Push the motor button on the back of the robot to turn the motors on.
+10. Click "PP to Main" then "Yes". 
+11. Press the play button on the touch pendant. 
+
+The robot should move to its starting position.
+
+Computer:
+
+1. Click the network connection icon at the top right of the desktop.
+2. Click on the second "Ethernet connection 1"
+3. In the terminal, use the following commands each in their own tabs:
+	a. Run a ros core:
+	roscore
+
+	b. Start the force-torque sensor:
+	rosrun robotiq_ft_sensor rq_sensor
+
+	c. Zero the force-torque sensor:
+	rosservice call /robotiq_ft_sensor_acc "command_id: 8"
+
+	d. Start communications between the computer and the ABB controller:	
+	rosrun irb120_accomodation_control custom_egm_test
+
+	e. Start the accomodation controller:
+	rosrun irb120_accomodation_control accommodation_controller
+
+4. Run whatever skills you need to run
+

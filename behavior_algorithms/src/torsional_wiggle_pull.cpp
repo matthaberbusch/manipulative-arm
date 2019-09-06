@@ -42,7 +42,7 @@ void tool_vector_z_callback(const geometry_msgs::Vector3& tool_vector_msg_z) {
 // ROS: main program
 int main(int argc, char** argv) {
     // ROS: for communication between programs
-    ros::init(argc,argv,"simple_move_until_touch");
+    ros::init(argc,argv,"torsional_wiggle_pull");
     ros::NodeHandle nh;
     ros::Subscriber cartesian_state_subscriber = nh.subscribe("cartesian_logger",1, cartesian_state_callback);
     ros::Subscriber ft_subscriber = nh.subscribe("transformed_ft_wrench",1,ft_callback);
@@ -52,7 +52,7 @@ int main(int argc, char** argv) {
 
     // Declare constants
     double KEEP_CONTACT_DISTANCE = -0.01, DT = 0.01;
-    double WIGGLE_RADIUS = 0.01, WIGGLE_RATE = 5, WIGGLE_TIME = 5;
+    double WIGGLE_RADIUS = 0.01, WIGGLE_RATE = 3, WIGGLE_TIME = 5;
     double current_loop = 0;
     double current_loop_of_state = 0;
     double current_state = 1;
@@ -69,12 +69,22 @@ int main(int argc, char** argv) {
     // The end effector pose (current_pose) and force torque data (ft_in_robot_frame) are global variables.
 
     // Get user input
-    cout << "Enter an amount of time to wiggle in seconds: ";
-    cin >> WIGGLE_TIME;
+    // cout << "Enter an amount of time to wiggle in seconds: ";
+    // cin >> WIGGLE_TIME;
+
+    nh.param("/torsional_wiggle_pull/wiggle_time", WIGGLE_TIME, 5.0); 
+
+    
+    // clear parameter from server 
+    nh.deleteParam("/torsional_wiggle_pull/wiggle_time"); 
+    
+    ROS_INFO("Output from parameter for runtime; %f", WIGGLE_TIME);
 
     // Calculate the total loops needed and loops between states
     double MAX_LOOPS = WIGGLE_TIME / DT;
-    double LOOPS_BETWEEN_STATES = MAX_LOOPS / (WIGGLE_RATE * STATES); 
+    
+    // Replaced by constant to have a set frequency
+    double LOOPS_BETWEEN_STATES = 1 / (DT * WIGGLE_RATE * STATES); // MAX_LOOPS / (WIGGLE_RATE * STATES); 
     cout<<"MAX_LOOPS"<<endl<<MAX_LOOPS<<endl;
     cout<<"LOOPS_BETWEEN_STATES"<<endl<<LOOPS_BETWEEN_STATES<<endl;
 

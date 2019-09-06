@@ -169,6 +169,7 @@ add_executable(score_calculator src/score_calculator.cpp)
 add_executable(accommodation_controller_with_rcc src/accommodation_controller_with_rcc.cpp)
 add_executable(accommodation_controller_restricted_position src/accommodation_controller_restricted_position.cpp)
 add_executable(accommodation_controller_with_bumpless_transitions src/accommodation_controller_with_bumpless_transitions.cpp)
+add_executable(buffer src/buffer.cpp)
 
 
 ## Rename C++ executable without prefix
@@ -298,6 +299,11 @@ target_link_libraries(accommodation_controller_restricted_position
   irb120_fk_ik
  )
  target_link_libraries(accommodation_controller_with_bumpless_transitions
+  ${catkin_LIBRARIES}
+  irb120_accomodation_control
+  irb120_fk_ik
+ )
+  target_link_libraries(buffer
   ${catkin_LIBRARIES}
   irb120_accomodation_control
   irb120_fk_ik

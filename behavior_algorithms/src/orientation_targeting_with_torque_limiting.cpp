@@ -51,6 +51,9 @@ int main(int argc, char** argv) {
     // TARGET_ORIENTATION will change with user input
     double DT = 0.01, THRESHOLD_TORQUE = 0.4, ROTATE_ANGLE = 0.5, KEEP_CONTACT_ANGLE = 0.1, TARGET_ORIENTATION = 0.05; // Do not increase the virtual attractor angle greater than 1.55 radians
     double KEEP_CONTACT_DISTANCE = 0.015;
+    double RUN_TIME = 10;
+    double total_number_of_loops = RUN_TIME / DT;
+    double loops_so_far = 0;
 
     // MATH: Define current pose quaternion
     Eigen::Quaterniond current_pose_quat;
@@ -65,11 +68,24 @@ int main(int argc, char** argv) {
     // The end effector pose (current_pose) and force torque data (ft_in_robot_frame) are global variables.
 
     // Get user input
-    cout << "Enter a rotation to move in radians: ";
-    cin >> TARGET_ORIENTATION;
+    // cout << "Enter a rotation to move in radians: ";
+    // cin >> TARGET_ORIENTATION;
+
+    // Replaced user input with cmd line in
+    // ros::NodeHandle n("~"); // refer to the global path to the local parameters
+
+    // called and passed in like: 'rosrun behavior_algorithms orientation_targeting_with_torque_limiting _target_orientation:=2'
+
+    // get parameter from server, passed by command line (if nothing passed in, results in default)
+    nh.param("/orientation_targeting_with_torque_limiting/target_orientation", TARGET_ORIENTATION, 1.57);
+    
+    // clear parameter from server 
+    nh.deleteParam("/orientation_targeting_with_torque_limiting/target_orientation"); 
+
+    ROS_INFO("Output from parameter for target_orientation; %f", TARGET_ORIENTATION);
 
     // ROS: Wait until we have position data. Our default position is 0.
-    while(current_pose.orientation.x == 0) ros::spinOnce();
+    //while(current_pose.orientation.x == 0) ros::spinOnce();
 
     // Get starting position and turn it into a quaternion
     virtual_attractor.pose = current_pose;
@@ -106,7 +122,7 @@ int main(int argc, char** argv) {
 
     // Begin loop
     // While we haven't touched anything and haven't reached our target
-    while((abs(ft_in_robot_frame.torque.x) < THRESHOLD_TORQUE) && (((current_orientation < target_orientation) && (TARGET_ORIENTATION >= 0)) || ((current_orientation >= target_orientation) && (TARGET_ORIENTATION < 0)))) { 
+    while( (loops_so_far <= total_number_of_loops) && (abs(ft_in_robot_frame.torque.x) < THRESHOLD_TORQUE) && (((current_orientation < target_orientation) && (TARGET_ORIENTATION >= 0)) || ((current_orientation >= target_orientation) && (TARGET_ORIENTATION < 0)))) { 
 
         // ROS: for communication between programs
         ros::spinOnce();
@@ -140,6 +156,9 @@ int main(int argc, char** argv) {
         // Print current position
         current_orientation = joint_states(5);
         cout<<"Current orientation: "<<endl<<current_orientation<<endl;
+
+        // Increase counter
+        loops_so_far = loops_so_far + 1;
     }
     
     // If we've touched
@@ -205,6 +224,17 @@ int main(int argc, char** argv) {
 
         // Keep the robot pressing down
         virtual_attractor.pose.position.x = current_pose.position.x + KEEP_CONTACT_DISTANCE;
+    }
+
+    //If we've timed out
+    if (loops_so_far > total_number_of_loops){
+        cout<<"Timed out"<<endl;
+
+        // ROS: for communication between programs
+        ros::spinOnce();
+
+        // Put the virtual attractor at the end effector
+        virtual_attractor.pose = current_pose;
     }
          
     // ROS: for communication between programs

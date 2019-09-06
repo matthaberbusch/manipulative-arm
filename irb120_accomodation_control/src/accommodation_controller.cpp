@@ -151,6 +151,47 @@ Eigen::Vector3d delta_phi_from_rots(Eigen::Matrix3d source_rot, Eigen::Matrix3d 
 	return delta_phi;
 }
 
+Eigen::Matrix3d rotation_matrix_from_euler_angles(Eigen::Vector3d euler_angle_vector) {
+	Eigen::Matrix3d x_rotation;
+	Eigen::Matrix3d y_rotation;
+	Eigen::Matrix3d z_rotation;
+	Eigen::Matrix3d rotation_matrix_from_euler_angles;
+
+	//TODO check if x should get 0, y 1, and z 2, as Tait-Bryan angles. Otherwise its opposite, for Euler Angles?
+
+	z_rotation(0,0) = cos(euler_angle_vector(2));
+   	z_rotation(0,1) = -sin(euler_angle_vector(2));
+   	z_rotation(0,2) = 0;
+   	z_rotation(1,0) = sin(euler_angle_vector(2));
+   	z_rotation(1,1) = cos(euler_angle_vector(2));
+   	z_rotation(1,2) = 0;
+   	z_rotation(2,0) = 0;
+   	z_rotation(2,1) = 0;
+   	z_rotation(2,2) = 1;
+
+   	y_rotation(0,0) = cos(euler_angle_vector(1));
+   	y_rotation(0,1) = 0;
+   	y_rotation(0,2) = sin(euler_angle_vector(1));
+   	y_rotation(1,0) = 0;
+   	y_rotation(1,1) = 1;
+   	y_rotation(1,2) = 0;
+   	y_rotation(2,0) = -sin(euler_angle_vector(1));
+   	y_rotation(2,1) = 0;
+   	y_rotation(2,2) = cos(euler_angle_vector(1));
+
+   	x_rotation(0,0) = 1;
+   	x_rotation(0,1) = 0;
+   	x_rotation(0,2) = 0;
+   	x_rotation(1,0) = 0;
+   	x_rotation(1,1) = cos(euler_angle_vector(0));
+   	x_rotation(1,2) = -sin(euler_angle_vector(0));
+   	x_rotation(2,0) = 0;
+   	x_rotation(2,1) = sin(euler_angle_vector(0));
+   	x_rotation(2,2) = cos(euler_angle_vector(0));
+
+   	rotation_matrix_from_euler_angles = z_rotation * y_rotation * x_rotation;
+}
+
 // subscriber callbacks
 void ftSensorCallback(const geometry_msgs::WrenchStamped& ft_sensor) {
 	// subscribed to "robotiq_ft_wrench"
@@ -453,7 +494,8 @@ int main(int argc, char **argv) {
 	z_vec_message.z = z_vec(2);
 
 	//NEW bumpless attractor pose
-	Eigen::VectorXd bumpless_virt_attr_pose(6);
+	Eigen::VectorXd bumpless_virt_attr_pose(3);
+	Eigen::Vector3d bumpless_virt_attr_angles;
 	double timer_counter = 0;
 	bool latch = false;
 
@@ -621,10 +663,7 @@ int main(int argc, char **argv) {
 		*/
 
 		// NEW Virtual attractor pose based on force felt
-		bumpless_virt_attr_pose.head(3) = -wrench_wrt_robot.head(3) / K_virt + current_ee_pos.head(3);
-		bumpless_virt_attr_pose.tail(3) = -wrench_wrt_robot.tail(3) / K_virt_ang + decompose_rot_mat(tool_wrt_robot.linear()); //TODO check
-		cout<<"wrench torques"<<endl<<wrench_wrt_robot.tail(3)<<endl;
-		cout<<"decomposed angles of the tool frame"<<endl<<decompose_rot_mat(tool_wrt_robot.linear())<<endl;
+		bumpless_virt_attr_pose = -wrench_wrt_robot.head(3) / K_virt + current_ee_pos.head(3);
 		
 		// Compute virtual attractor forces
 		// If the controller has just started, use the bumpless virtual attractor
@@ -634,16 +673,17 @@ int main(int argc, char **argv) {
 			virt_attr_pos(0) = bumpless_virt_attr_pose(0);
 			virt_attr_pos(1) = bumpless_virt_attr_pose(1);
 			virt_attr_pos(2) = bumpless_virt_attr_pose(2);
-			// Is this wrong below?
-			//virt_attr_rot(0) = bumpless_virt_attr_pose(3);
-			//virt_attr_rot(1) = bumpless_virt_attr_pose(4);
-			//virt_attr_rot(2) = bumpless_virt_attr_pose(5);
-			virt_attr_rot = tool_wrt_robot.linear();
+			//virt_attr_rot = tool_wrt_robot.linear();
+			bumpless_virt_attr_angles(0) =  -wrench_wrt_robot(3) / K_virt_ang + decompose_rot_mat(tool_wrt_robot.linear())(0);
+			bumpless_virt_attr_angles(1) =  -wrench_wrt_robot(4) / K_virt_ang + decompose_rot_mat(tool_wrt_robot.linear())(1);
+			bumpless_virt_attr_angles(2) =  -wrench_wrt_robot(5) / K_virt_ang + decompose_rot_mat(tool_wrt_robot.linear())(2);
+			virt_attr_rot = rotation_matrix_from_euler_angles(bumpless_virt_attr_angles);
 
 			virtual_force.head(3) = K_virt * (virt_attr_pos - current_ee_pos.head(3));
-			virtual_force.tail(3) = bumpless_virt_attr_pose.tail(3); // K_virt_ang * (delta_phi_from_rots(tool_wrt_robot.linear(), virt_attr_rot));
+			virtual_force.tail(3) = K_virt_ang * (delta_phi_from_rots(tool_wrt_robot.linear(), virt_attr_rot));//bumpless_virt_attr_pose.tail(3); // K_virt_ang * (delta_phi_from_rots(tool_wrt_robot.linear(), virt_attr_rot));
 			cout<<"Bumpless attractor used"<<endl;
-			//if(!cmd) virtual_force<<0,0,0,0,0,0; I don't think we need this
+			cout<<"wrench torques"<<endl<<wrench_wrt_robot.tail(3)<<endl;
+			cout<<"decomposed angles of the tool frame"<<endl<<decompose_rot_mat(tool_wrt_robot.linear())<<endl;
 		}
 
 		// Otherwise do what the controller usually does
