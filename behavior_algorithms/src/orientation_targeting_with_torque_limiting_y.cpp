@@ -6,7 +6,6 @@
 
 // ROS: include libraries
 #include <iostream>
-#include <sstream>
 #include <ros/ros.h>
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/PoseStamped.h>
@@ -50,7 +49,6 @@ int main(int argc, char** argv) {
     ros::Subscriber joint_state_sub = nh.subscribe("abb120_joint_state",1,jointStateCallback);
 
     ros::ServiceClient client = nh.serviceClient<behavior_algorithms::status_service>("status_service");
-    ros::ServiceClient client_start = nh.serviceClient<behavior_algorithms::status_service>("start_service");
     behavior_algorithms::status_service srv;
     srv.request.name = "OTTL";
 
@@ -91,25 +89,6 @@ int main(int argc, char** argv) {
 
     ROS_INFO("Output from parameter for target_orientation; %f", TARGET_ORIENTATION);
 
-    // With labeled parameter, now call service to send message that program will start
-    std::ostringstream request_status; 
-    request_status << "target_orientation " << TARGET_ORIENTATION << " radians";
-
-    srv.request.status = request_status.str();
-    // ROS_WARN("Request Status: %s", request_status.str().c_str());
-
-    if(client_start.call(srv)){
-        // success
-        cout<<"Called service_start with name succesfully"<<endl;
-    }
-    else{
-        // failed to call service
-        ROS_ERROR("Failed to call service service_start");
-    }
-
-    // Set as unknown in case program somehow progresses past loop without any of the 3 conditions
-    srv.request.status = "Unkown";
-
     // ROS: Wait until we have position data. Our default position is 0.
     while(current_pose.orientation.x == 0) ros::spinOnce();
 
@@ -132,14 +111,14 @@ int main(int argc, char** argv) {
      // MATH: Define rotation matrix for moving
     Eigen::Matrix3d ROT_MAT_MOVE;
     ROT_MAT_MOVE(0,0) = cos(ROTATE_ANGLE);
-    ROT_MAT_MOVE(0,1) = -sin(ROTATE_ANGLE);
-    ROT_MAT_MOVE(0,2) = 0;
-    ROT_MAT_MOVE(1,0) = sin(ROTATE_ANGLE);
-    ROT_MAT_MOVE(1,1) = cos(ROTATE_ANGLE);
+    ROT_MAT_MOVE(0,1) = 0;
+    ROT_MAT_MOVE(0,2) = sin(ROTATE_ANGLE);
+    ROT_MAT_MOVE(1,0) = 0;
+    ROT_MAT_MOVE(1,1) = 1;
     ROT_MAT_MOVE(1,2) = 0;
-    ROT_MAT_MOVE(2,0) = 0;
+    ROT_MAT_MOVE(2,0) = -sin(ROTATE_ANGLE);
     ROT_MAT_MOVE(2,1) = 0;
-    ROT_MAT_MOVE(2,2) = 1;
+    ROT_MAT_MOVE(2,2) = cos(ROTATE_ANGLE);
 
     // Print starting and target positions
     cout<<"current_orientation: "<<endl<<current_orientation<<endl;
@@ -265,7 +244,7 @@ int main(int argc, char** argv) {
 
     if(client.call(srv)){
         // success
-        cout<<"Called service with name succesfully"<<endl;
+        cout<<"Called service with name succesfully";
     }
     else{
         // failed to call service

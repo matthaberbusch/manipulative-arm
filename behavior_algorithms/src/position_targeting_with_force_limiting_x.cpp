@@ -6,7 +6,6 @@
 
 // ROS: include libraries
 #include <iostream>
-#include <sstream>
 #include <ros/ros.h>
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/PoseStamped.h>
@@ -40,22 +39,30 @@ void set_virt_attr_callback(const geometry_msgs::PoseStamped& set_attr) {
 void tool_vector_callback(const geometry_msgs::Vector3& tool_vector_msg_z) {
     tool_vector_z = tool_vector_msg_z;
 }
+void tool_vector_y_callback(const geometry_msgs::Vector3& tool_vector_msg_y) {
+    tool_vector_y = tool_vector_msg_y;
+}
+void tool_vector_x_callback(const geometry_msgs::Vector3& tool_vector_msg_x) {
+    tool_vector_x = tool_vector_msg_x;
+}
 
 // ROS: main program
 int main(int argc, char** argv) {
     // ROS: for communication between programs
-    ros::init(argc,argv,"simple_move_until_touch");
+    ros::init(argc,argv,"ptfl_x");
     ros::NodeHandle nh;
     ros::Subscriber cartesian_state_subscriber = nh.subscribe("cartesian_logger",1, cartesian_state_callback);
     ros::Subscriber ft_subscriber = nh.subscribe("transformed_ft_wrench",1,ft_callback);
     ros::Subscriber set_virt_attr = nh.subscribe("set_virt_attr",1,set_virt_attr_callback); //NEW
     ros::Subscriber tool_vector_sub_z = nh.subscribe("tool_vector_z",1,tool_vector_callback); //NEW
+    ros::Subscriber tool_vector_sub_y = nh.subscribe("tool_vector_y",1,tool_vector_y_callback); //NEW
+    ros::Subscriber tool_vector_sub_x = nh.subscribe("tool_vector_x",1,tool_vector_x_callback); //NEW
     ros::Publisher virtual_attractor_publisher = nh.advertise<geometry_msgs::PoseStamped>("Virt_attr_pose",1);
 
+
     ros::ServiceClient client = nh.serviceClient<behavior_algorithms::status_service>("status_service");
-    ros::ServiceClient client_start = nh.serviceClient<behavior_algorithms::status_service>("start_service");
     behavior_algorithms::status_service srv;
-    srv.request.name = "PTFL_z";
+    srv.request.name = "PTFL_x";
     // Declare constants
     // TARGET_DISTANCE will change with user input
 
@@ -63,12 +70,9 @@ int main(int argc, char** argv) {
     // Peg in hole params: 
 
     double PULL_DISTANCE = 0.01, KEEP_CONTACT_DISTANCE = 0.0075, DT = 0.01, FORCE_TRESHOLD = 12, TARGET_DISTANCE = 0.05; // Pull distance was 0.01, force_threshold was 13!
-    double RUN_TIME = 10000;
+    double RUN_TIME = 30;
     double total_number_of_loops = RUN_TIME / DT;
     double loops_so_far = 0;
-
-    // Variable for which set of parameters to use
-    string param_set = "Peg";
 
     // ROS: for loop rate
     ros::Rate naptime(1/DT);
@@ -84,52 +88,18 @@ int main(int argc, char** argv) {
     // cin >> TARGET_DISTANCE;
     
     // Get parameter passed in through 
-    nh.param("/simple_move_until_touch/target_distance", TARGET_DISTANCE, 0.03);
-    nh.param<std::string>("/simple_move_until_touch/param_set", param_set, "Peg");
+    nh.param("/ptfl_x/target_distance", TARGET_DISTANCE, -0.03);
+    
     // clear parameter from server 
-    nh.deleteParam("/simple_move_until_touch/target_distance"); 
-    nh.deleteParam("/simple_move_until_touch/param_set");
+    nh.deleteParam("/ptfl_x/target_distance"); 
 
-    if(!strcmp(param_set.c_str(), "Peg")){
-        // set the new values here
-        PULL_DISTANCE = 0.01;
-        FORCE_TRESHOLD = 12;
-        ROS_INFO("Params set for PEG");
-    }
-    else if (!strcmp(param_set.c_str(), "Bottle_Cap")){
-        // set the other values here
-        PULL_DISTANCE = 0.015;
-        FORCE_TRESHOLD = 15;
-        ROS_INFO("Params set for BOTTLE_CAP");
-    }
-
-    ROS_INFO("Output from parameter for target_distance; %f", TARGET_DISTANCE); 
-
-    // With labeled parameter, now call service to send message that program will start
-    std::ostringstream request_status; 
-    request_status << "target_distance " << TARGET_DISTANCE << "m";
-
-    srv.request.status = request_status.str();
-    // ROS_WARN("Request Status: %s", request_status.str().c_str());
-
-    if(client_start.call(srv)){
-        // success
-        cout<<"Called service_start with name succesfully"<<endl;
-    }
-    else{
-        // failed to call service
-        ROS_ERROR("Failed to call service service_start");
-    }
-
-    // Set as unknown in case program somehow progresses past loop without any of the 3 conditions
-    srv.request.status = "Unkown";
-
+    ROS_INFO("Output from parameter for target_distance; %f", TARGET_DISTANCE);
 
     // ROS: Wait until we have position data. Our default position is 0.
     while(current_pose.position.x == 0) ros::spinOnce();
 
     // Get starting position
-    double start_position = abs(current_pose.position.x);
+    double start_position = abs(current_pose.position.y);
     double target_position = start_position + TARGET_DISTANCE;
 
     // Print starting and target positions
@@ -139,7 +109,7 @@ int main(int argc, char** argv) {
     // Begin loop
     // Assuming we're always going in the positive x direction.
     // While we haven't touched anything and haven't reached our target
-    while( (loops_so_far <= total_number_of_loops) && (abs(ft_in_robot_frame.force.x) < FORCE_TRESHOLD) && (((abs(current_pose.position.x) < target_position) && (TARGET_DISTANCE >= 0)) || ((abs(current_pose.position.x) >= target_position) && (TARGET_DISTANCE < 0))) ) {
+    while( (loops_so_far <= total_number_of_loops) && (abs(ft_in_robot_frame.force.y) < FORCE_TRESHOLD) && (((abs(current_pose.position.y) < target_position) && (TARGET_DISTANCE >= 0)) || ((abs(current_pose.position.y) >= target_position) && (TARGET_DISTANCE < 0))) ) {
         // ROS: for communication between programs
         ros::spinOnce();
 
@@ -148,15 +118,15 @@ int main(int argc, char** argv) {
  
         // Pull down in the direction of the tool
         if(TARGET_DISTANCE > 0){
-            virtual_attractor.pose.position.x = current_pose.position.x + tool_vector_z.x * PULL_DISTANCE;
-            virtual_attractor.pose.position.y = current_pose.position.y + tool_vector_z.y * PULL_DISTANCE;
-            virtual_attractor.pose.position.z = current_pose.position.z + tool_vector_z.z * PULL_DISTANCE;
+            virtual_attractor.pose.position.x = current_pose.position.x + tool_vector_x.x * PULL_DISTANCE;
+            virtual_attractor.pose.position.y = current_pose.position.y + tool_vector_x.y * PULL_DISTANCE;
+            virtual_attractor.pose.position.z = current_pose.position.z + tool_vector_x.z * PULL_DISTANCE;
         }
         // Pull up in the direction of the tool
         else {
-            virtual_attractor.pose.position.x = current_pose.position.x - tool_vector_z.x * PULL_DISTANCE;
-            virtual_attractor.pose.position.y = current_pose.position.y - tool_vector_z.y * PULL_DISTANCE;
-            virtual_attractor.pose.position.z = current_pose.position.z - tool_vector_z.z * PULL_DISTANCE;
+            virtual_attractor.pose.position.x = current_pose.position.x - tool_vector_x.x * PULL_DISTANCE;
+            virtual_attractor.pose.position.y = current_pose.position.y - tool_vector_x.y * PULL_DISTANCE;
+            virtual_attractor.pose.position.z = current_pose.position.z - tool_vector_x.z * PULL_DISTANCE;
         }
 
         // ROS: for communication between programs
@@ -166,11 +136,11 @@ int main(int argc, char** argv) {
         loops_so_far = loops_so_far + 1;
 
         // Print current position
-        // cout<<"Current position: "<<endl<<abs(current_pose.position.x)<<endl;
+        cout<<"Current position: "<<endl<<abs(current_pose.position.y)<<endl;
     }
     
     // If we've touched
-    if(abs(ft_in_robot_frame.force.x) >= FORCE_TRESHOLD) {
+    if(abs(ft_in_robot_frame.force.y) >= FORCE_TRESHOLD) {
         // Print message
         cout<<"Force threshold crossed"<<endl;
         srv.request.status = "Force threshold crossed";
@@ -179,19 +149,19 @@ int main(int argc, char** argv) {
 
         // Keep the virtual attractor slightly below the surface, or above if pulling back
         virtual_attractor.pose = current_pose;
-        if (abs(current_pose.position.x) < target_position){
-            virtual_attractor.pose.position.x = current_pose.position.x + KEEP_CONTACT_DISTANCE;
+        if (abs(current_pose.position.y) < target_position){
+            virtual_attractor.pose.position.y = current_pose.position.y + KEEP_CONTACT_DISTANCE;
         }
         else {
-            virtual_attractor.pose.position.x = current_pose.position.x - KEEP_CONTACT_DISTANCE;
+            virtual_attractor.pose.position.y = current_pose.position.y - KEEP_CONTACT_DISTANCE;
         }
     }
 
     // If we've reached target position
-    if((abs(current_pose.position.x) >= target_position && (TARGET_DISTANCE > 0) ) || (abs(current_pose.position.x) < target_position && (TARGET_DISTANCE <= 0) ) ) {
+    if((abs(current_pose.position.y) >= target_position && (TARGET_DISTANCE > 0) ) || (abs(current_pose.position.y) < target_position && (TARGET_DISTANCE <= 0) ) ) {
         // Print message
         cout<<"Target position reached"<<endl;
-        srv.request.status = "target position reached";
+        srv.request.status = "Target position reached";
         // ROS: for communication between programs
         ros::spinOnce();
 
@@ -210,16 +180,16 @@ int main(int argc, char** argv) {
         virtual_attractor.pose = current_pose;
     }
 
+    // ROS: for communication between programs
     if(client.call(srv)){
         // success
-        cout<<"Called service_exit with name succesfully"<<endl;
+        cout<<"Called service with name succesfully";
     }
     else{
         // failed to call service
         ROS_ERROR("Failed to call service status_service");
     }
-    
-    // ROS: for communication between programs
+
     virtual_attractor_publisher.publish(virtual_attractor);
     naptime.sleep();
 

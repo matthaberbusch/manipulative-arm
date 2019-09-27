@@ -6,6 +6,7 @@
 
 // ROS: include libraries
 #include <iostream>
+#include <sstream>
 #include <ros/ros.h>
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/PoseStamped.h>
@@ -13,6 +14,7 @@
 #include <std_msgs/Float64.h>
 #include <Eigen/QR>
 #include <Eigen/Dense>
+#include <behavior_algorithms/status_service.h>
 using namespace std;
 
 // Declare variables
@@ -50,6 +52,11 @@ int main(int argc, char** argv) {
     ros::Subscriber tool_vector_sub_z = nh.subscribe("tool_vector_z",1,tool_vector_z_callback);
     ros::Publisher virtual_attractor_publisher = nh.advertise<geometry_msgs::PoseStamped>("Virt_attr_pose",1);
 
+    ros::ServiceClient client = nh.serviceClient<behavior_algorithms::status_service>("status_service");
+    ros::ServiceClient client_start = nh.serviceClient<behavior_algorithms::status_service>("start_service");
+    behavior_algorithms::status_service srv;
+    srv.request.name = "Torsional wiggle push";
+
     // Declare constants
     double KEEP_CONTACT_DISTANCE = 0.01, DT = 0.01;
     double WIGGLE_RADIUS = 0.01, WIGGLE_RATE = 3, WIGGLE_TIME = 5;
@@ -78,6 +85,25 @@ int main(int argc, char** argv) {
     nh.deleteParam("/torsional_wiggle_push/wiggle_time"); 
     
     ROS_INFO("Output from parameter for runtime; %f", WIGGLE_TIME);
+
+    // With labeled parameter, now call service to send message that program will start
+    std::ostringstream request_status; 
+    request_status << "runtime " << WIGGLE_TIME << " seconds";
+
+    srv.request.status = request_status.str();
+    // ROS_WARN("Request Status: %s", request_status.str().c_str());
+
+    if(client_start.call(srv)){
+        // success
+        cout<<"Called service_start with name succesfully"<<endl;
+    }
+    else{
+        // failed to call service
+        ROS_ERROR("Failed to call service service_start");
+    }
+
+    // Set as unknown in case program somehow progresses past loop without any of the 3 conditions
+    srv.request.status = "Unkown";
 
     // Calculate the total loops needed and loops between states
     double MAX_LOOPS = WIGGLE_TIME / DT;
@@ -209,6 +235,18 @@ int main(int argc, char** argv) {
     virtual_attractor.pose = current_pose;
     virtual_attractor_publisher.publish(virtual_attractor);
     naptime.sleep();
+
+    srv.request.status = "Completed run of specified length";
+    
+    if(client.call(srv)){
+        // success
+        cout<<"Called service with name succesfully"<<endl;
+    }
+    else{
+        // failed to call service
+        ROS_ERROR("Failed to call service status_service");
+    }
+
     cout<<"End"<<endl;
 
     // End of program

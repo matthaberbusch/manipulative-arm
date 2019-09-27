@@ -27,6 +27,7 @@ TODO did I miss anything?
 #include <Eigen/Geometry>
 #include <std_msgs/Float64.h>
 #include <std_msgs/Float64MultiArray.h>
+#include <std_msgs/Int8.h>
 int dbg; // TODO not used
 
 // MARKER
@@ -40,6 +41,8 @@ using namespace std;
 //set these two values by service callback, make available to "main"
 double g_z_height = 0.0;
 bool g_trigger = true;
+sensor_msgs::JointState last_desired_joint_state_;
+
 //a service to prompt a new display computation.
 // E.g., to construct a plane at height z=1.0, trigger with: 
 // rosservice call rviz_marker_svc 1.0
@@ -93,6 +96,7 @@ void init_marker_vals(visualization_msgs::Marker &marker) {
 }
 
 bool freeze_mode = false;
+int freeze_mode_int = 0;
 // filter variables 
 Eigen::MatrixXd wrench_filter = Eigen::MatrixXd::Zero(10,6);
 int filter_counter = 0;
@@ -286,8 +290,16 @@ Eigen::Vector3d delta_phi_from_rots(Eigen::Matrix3d source_rot, Eigen::Matrix3d 
 bool freeze_service_Callback(irb120_accomodation_control::freeze_serviceRequest &request, irb120_accomodation_control::freeze_serviceResponse &response) {
 	
 	freeze_mode = !freeze_mode;
+	if (freeze_mode) freeze_mode_int = 1;
+	else freeze_mode_int = 0;
 
-	frozen_joint_states_ = joint_states_;
+	//frozen_joint_states_ = joint_states_; used to use actual joint state, but now we use commanded joint state
+	frozen_joint_states_(0) = last_desired_joint_state_.position[0];
+	frozen_joint_states_(1) = last_desired_joint_state_.position[1];
+	frozen_joint_states_(2) = last_desired_joint_state_.position[2];
+	frozen_joint_states_(3) = last_desired_joint_state_.position[3];
+	frozen_joint_states_(4) = last_desired_joint_state_.position[4];
+	frozen_joint_states_(5) = last_desired_joint_state_.position[5];
 
 	ROS_INFO("Freeze mode has been toggled");
 	if(freeze_mode) {
@@ -319,6 +331,8 @@ int main(int argc, char **argv) {
 	ros::Publisher rcc_pub = nh.advertise<geometry_msgs::PoseStamped>("remote_center_of_compliance",1);  // NEW
 	ros::Publisher ft_pub = nh.advertise<geometry_msgs::Wrench>("transformed_ft_wrench",1);
 	ros::Publisher virt_attr_after_tf = nh.advertise<geometry_msgs::PoseStamped>("tfd_virt_attr",1);
+	ros::Publisher bumpless_virt_attr_after_tf = nh.advertise<geometry_msgs::PoseStamped>("bumpless_tfd_virt_attr",1);
+	ros::Publisher freeze_mode_pub = nh.advertise<std_msgs::Int8>("freeze_mode_topic",1);
 	ros::Publisher x_vec_pub = nh.advertise<geometry_msgs::Vector3>("tool_vector_x",1);
 	ros::Publisher y_vec_pub = nh.advertise<geometry_msgs::Vector3>("tool_vector_y",1);
 	ros::Publisher z_vec_pub = nh.advertise<geometry_msgs::Vector3>("tool_vector_z",1);
@@ -386,14 +400,18 @@ int main(int argc, char **argv) {
 	
 	// ROS requirement - messages must be in a certain format
 	sensor_msgs::JointState desired_joint_state;
-	geometry_msgs::PoseStamped cartesian_log, virt_attr_log, rcc; // NEW rcc
+	geometry_msgs::PoseStamped cartesian_log, virt_attr_log, rcc, bumpless_virt_attr_log; // NEW rcc
 	cartesian_log.header.frame_id = "map";
 	virt_attr_log.header.frame_id = "map";
+	bumpless_virt_attr_log.header.frame_id = "map";
 	rcc.header.frame_id = "map";
 	geometry_msgs::Pose virt_attr;
 	geometry_msgs::Wrench transformed_wrench;
 	desired_joint_state.position.resize(6);
 	desired_joint_state.velocity.resize(6);
+
+	last_desired_joint_state_.position.resize(6);
+	last_desired_joint_state_.velocity.resize(6);
 	
 	// // define default values for accommodation gain
 	// accomodation_gain<<1,0,0,0,0,0,
@@ -684,6 +702,9 @@ int main(int argc, char **argv) {
 			cout<<"Bumpless attractor used"<<endl;
 			cout<<"wrench torques"<<endl<<wrench_wrt_robot.tail(3)<<endl;
 			cout<<"decomposed angles of the tool frame"<<endl<<decompose_rot_mat(tool_wrt_robot.linear())<<endl;
+			cout<<"bumpless virtual attractor pose: "<<endl;
+			cout<<bumpless_virt_attr_pose<<endl;
+
 		}
 
 		// Otherwise do what the controller usually does
@@ -691,6 +712,10 @@ int main(int argc, char **argv) {
 			if(cmd) {
 				virtual_force.head(3) = K_virt * (virt_attr_pos - current_ee_pos.head(3));
 				virtual_force.tail(3) = K_virt_ang * (delta_phi_from_rots(tool_wrt_robot.linear(), virt_attr_rot));
+				cout<<"virtual attractor pose"<<endl;
+				cout<<virt_attr_pos<<endl;
+				cout<<"bumpless virtual attractor pose: "<<endl;
+				cout<<bumpless_virt_attr_pose<<endl;
 			}
 			else{
 				virtual_force<<0,0,0,0,0,0; // this only prevents errors at startup, not if you cut the skill in the middle
@@ -736,6 +761,10 @@ int main(int argc, char **argv) {
 		//NEW only consider the x force in compliant motion for RCC
 		x_force_only_wrench_wrt_robot<<wrench_wrt_robot(0),0,0,0,0,0;
 
+		//WRENCH TORQUE GAIN TEST
+		wrench_wrt_robot(3) = wrench_wrt_robot(3) * 40;
+		wrench_wrt_robot(4) = wrench_wrt_robot(4) * 40;
+		wrench_wrt_robot(5) = wrench_wrt_robot(5) * 40;
 
 		// CONTROL LAW
 		des_cart_acc = inertia_mat_inv*(-B_virt * des_twist + wrench_wrt_robot + virtual_force); //	used to be des_cart_acc = inertia_mat_inv*(-B_virt * des_twist + wrench_wrt_robot + virtual_force);
@@ -752,8 +781,9 @@ int main(int argc, char **argv) {
 		// Now if in freeze mode, clear the attractor out
 		
 		if (freeze_mode) {
-			virt_attr_pos = Eigen::VectorXd::Zero(3);
-			virt_attr_rot = Eigen::MatrixXd::Zero(3,3);
+			// NO, it will always be already cleared out, correct? 
+			//virt_attr_pos = Eigen::VectorXd::Zero(3);
+			//virt_attr_rot = Eigen::MatrixXd::Zero(3,3);
 		}
 		
 
@@ -761,7 +791,7 @@ int main(int argc, char **argv) {
 							
 		//ensure that desired joint vel is within set safe limits
 		if(des_jnt_vel.norm() > MAX_JNT_VEL_NORM) des_jnt_vel = (des_jnt_vel / des_jnt_vel.norm()) * MAX_JNT_VEL_NORM;
-		cout<<"desired joint velocity: "<<endl<<des_jnt_vel<<endl;
+		// cout<<"desired joint velocity: "<<endl<<des_jnt_vel<<endl;
 		
 		//euler one step integration to calculate position from velocities
 		Eigen::MatrixXd des_jnt_pos = Eigen::VectorXd::Zero(6);
@@ -773,6 +803,9 @@ int main(int argc, char **argv) {
 
 		//Publish desired jointstate
 		arm_publisher.publish(desired_joint_state);
+		last_desired_joint_state_ = desired_joint_state;
+
+		cout<<"Current EE Pose:"<<endl<<current_ee_pos<<endl;
 
 		// publish cartesian coordinates of robot end effector
 		cartesian_log.pose.position.x = current_ee_pos(0);
@@ -807,6 +840,17 @@ int main(int argc, char **argv) {
 		virt_attr_log.pose.orientation.z = virt_quat.z();
 		virt_attr_log.header.stamp = ros::Time::now();
 		virt_attr_after_tf.publish(virt_attr_log);
+
+		//publish coordinates of bumpless virtual attractor
+		bumpless_virt_attr_log.pose.position.x = bumpless_virt_attr_pose(0);
+		bumpless_virt_attr_log.pose.position.y = bumpless_virt_attr_pose(1);
+		bumpless_virt_attr_log.pose.position.z = bumpless_virt_attr_pose(2);
+		bumpless_virt_attr_log.pose.orientation.w = 0; //TODO CHANGE CHANGE CHANGE CHANGE. THESE ARE PLACEHOLDERS.
+		bumpless_virt_attr_log.pose.orientation.x = 0;
+		bumpless_virt_attr_log.pose.orientation.y = 0;
+		bumpless_virt_attr_log.pose.orientation.z = 0;
+		bumpless_virt_attr_log.header.stamp = ros::Time::now();
+		bumpless_virt_attr_after_tf.publish(bumpless_virt_attr_log);
 			
 		//publishing force torque values transformed into robot frame
 		transformed_wrench.force.x = wrench_wrt_robot(0);

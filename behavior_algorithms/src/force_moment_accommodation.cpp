@@ -11,6 +11,7 @@
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/Wrench.h>
 #include <std_msgs/Float64.h>
+#include <behavior_algorithms/status_service.h>
 using namespace std;
 
 // Declare variables
@@ -35,6 +36,11 @@ int main(int argc, char** argv) {
     ros::Subscriber cartesian_state_subscriber = nh.subscribe("cartesian_logger",1, cartesian_state_callback);
     ros::Subscriber ft_subscriber = nh.subscribe("transformed_ft_wrench",1,ft_callback);
     ros::Publisher virtual_attractor_publisher = nh.advertise<geometry_msgs::PoseStamped>("Virt_attr_pose",1);
+
+    ros::ServiceClient client = nh.serviceClient<behavior_algorithms::status_service>("status_service");
+    ros::ServiceClient client_start = nh.serviceClient<behavior_algorithms::status_service>("start_service");
+    behavior_algorithms::status_service srv;
+    srv.request.name = "FMA";
 
     // Declare constants
     double DT = 0.01, RUN_TIME = 1;
@@ -63,6 +69,24 @@ int main(int argc, char** argv) {
     
     ROS_INFO("Output from parameter for runtime; %f", RUN_TIME);
 
+    // With labeled parameter, now call service to send message that program will start
+    std::ostringstream request_status; 
+    request_status << "runtime " << RUN_TIME << " seconds";
+
+    srv.request.status = request_status.str();
+    // ROS_WARN("Request Status: %s", request_status.str().c_str());
+
+    if(client_start.call(srv)){
+        // success
+        cout<<"Called service_start with name succesfully"<<endl;
+    }
+    else{
+        // failed to call service
+        ROS_ERROR("Failed to call service service_start");
+    }
+
+    // Set as unknown in case program somehow progresses past loop without any of the 3 conditions
+    srv.request.status = "Unkown";
 
     double total_number_of_loops = RUN_TIME / DT;
     double loops_so_far = 0;
@@ -86,6 +110,16 @@ int main(int argc, char** argv) {
         // ROS: For communication between programs
         virtual_attractor_publisher.publish(virtual_attractor);
         naptime.sleep();
+    }
+    srv.request.status = "Completed run of specified length";
+
+    if(client.call(srv)){
+        // success
+        cout<<"Called service with name succesfully"<<endl;
+    }
+    else{
+        // failed to call service
+        ROS_ERROR("Failed to call service status_service");
     }
     
     // End of program

@@ -28,14 +28,24 @@ Computer:
 	b. Start the force-torque sensor:
 	rosrun robotiq_ft_sensor rq_sensor
 
-	c. Zero the force-torque sensor:
-	rosservice call /robotiq_ft_sensor_acc "command_id: 8"
-
-	d. Start communications between the computer and the ABB controller:	
+	c. Start communications between the computer and the ABB controller:	
 	rosrun irb120_accomodation_control custom_egm_test
+
+	d. Zero the force-torque sensor:
+	rosservice call /robotiq_ft_sensor_acc "command_id: 8"
 
 	e. Start the accomodation controller:
 	rosrun irb120_accomodation_control accommodation_controller
+	
+	f. Start the plot data delay:
+	rosrun irb120_accomodation_control buffer
+
+	g. Start the delayed video feed
+	gst-launch-1.0 v4l2src device=/dev/video0 ! queue max-size-buffers=0 max-size-time=0 max-size-bytes=0 min-threshold-time=4000000000 ! autovideosink
+
+	h. Start the GUI from ~/ros_ws/src/manipulative-arm/gui/
+	python skills_gui.py
+
 
 4. Run whatever skills you need to run
 
