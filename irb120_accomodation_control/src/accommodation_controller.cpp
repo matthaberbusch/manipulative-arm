@@ -96,7 +96,7 @@ void init_marker_vals(visualization_msgs::Marker &marker) {
 }
 
 bool freeze_mode = false;
-int freeze_mode_int = 0;
+std_msgs::Int8 freeze_mode_int;
 // filter variables 
 Eigen::MatrixXd wrench_filter = Eigen::MatrixXd::Zero(10,6);
 int filter_counter = 0;
@@ -290,8 +290,8 @@ Eigen::Vector3d delta_phi_from_rots(Eigen::Matrix3d source_rot, Eigen::Matrix3d 
 bool freeze_service_Callback(irb120_accomodation_control::freeze_serviceRequest &request, irb120_accomodation_control::freeze_serviceResponse &response) {
 	
 	freeze_mode = !freeze_mode;
-	if (freeze_mode) freeze_mode_int = 1;
-	else freeze_mode_int = 0;
+	if (freeze_mode) freeze_mode_int.data = 1;
+	else freeze_mode_int.data = 0;
 
 	//frozen_joint_states_ = joint_states_; used to use actual joint state, but now we use commanded joint state
 	frozen_joint_states_(0) = last_desired_joint_state_.position[0];
@@ -338,6 +338,7 @@ int main(int argc, char **argv) {
 	ros::Publisher z_vec_pub = nh.advertise<geometry_msgs::Vector3>("tool_vector_z",1);
 	ros::ServiceServer freeze_service = nh.advertiseService("freeze_service",freeze_service_Callback);
 
+	freeze_mode_int.data = 0;
 // MARKER
 	ros::Publisher vis_pub = nh.advertise<visualization_msgs::Marker>("example_marker_topic", 0);
     visualization_msgs::Marker marker; // instantiate a marker object
@@ -366,14 +367,16 @@ int main(int argc, char **argv) {
 	Eigen::VectorXd des_jnt_vel = Eigen::VectorXd::Zero(6);
 	Eigen::VectorXd des_cart_acc(6);
 	Eigen::VectorXd des_twist = Eigen::VectorXd::Zero(6);
+	Eigen::VectorXd des_twist_w_gain = Eigen::VectorXd::Zero(6);
 	// declare constants
 	double dt_ = 0.01;
 	double MAX_JNT_VEL_NORM = 10;
 	double MAX_TWIST_NORM = 0.1;
 	// declare gains
-	double B_virt = 4000;
+	double B_virt_trans = 4000; //was 4000
+	double B_virt_rot = 100; //was 4000
 	double K_virt = 1000; 
-	double K_virt_ang = 1000;
+	double K_virt_ang = 40; //was 1000 (newly 100)
 
 	// NEW
 	double alpha_x, alpha_y, a_x, a_y, b_x, b_y;
@@ -762,12 +765,24 @@ int main(int argc, char **argv) {
 		x_force_only_wrench_wrt_robot<<wrench_wrt_robot(0),0,0,0,0,0;
 
 		//WRENCH TORQUE GAIN TEST
-		wrench_wrt_robot(3) = wrench_wrt_robot(3) * 40;
-		wrench_wrt_robot(4) = wrench_wrt_robot(4) * 40;
-		wrench_wrt_robot(5) = wrench_wrt_robot(5) * 40;
+		// int wt_gain = 1;
+
+		// wrench_wrt_robot(3) = wrench_wrt_robot(3) * wt_gain; 
+		// wrench_wrt_robot(4) = wrench_wrt_robot(4) * wt_gain;
+		// wrench_wrt_robot(5) = wrench_wrt_robot(5) * wt_gain;
+
+		// Make temporary twist to have the head and tail be factored by the gain, B-virt for the rot and trans
+		// -B_virt * des_twist converted to use two gains
+
+		des_twist_w_gain.head(3) = -B_virt_trans * des_twist.head(3);
+		des_twist_w_gain.tail(3) = -B_virt_rot * des_twist.tail(3);
+		cout<<"Des twist: "<<endl;
+		cout<<(-B_virt_trans * des_twist)<<endl;
+		cout<<"Des twist w gain: "<<endl;
+		cout<<des_twist_w_gain<<endl;
 
 		// CONTROL LAW
-		des_cart_acc = inertia_mat_inv*(-B_virt * des_twist + wrench_wrt_robot + virtual_force); //	used to be des_cart_acc = inertia_mat_inv*(-B_virt * des_twist + wrench_wrt_robot + virtual_force);
+		des_cart_acc = inertia_mat_inv*(des_twist_w_gain + wrench_wrt_robot + virtual_force); //	used to be des_cart_acc = inertia_mat_inv*(-B_virt * des_twist + wrench_wrt_robot + virtual_force);
 		//des_cart_acc = inertia_mat_inv*(-B_virt * des_twist + x_force_only_wrench_wrt_robot + virtual_force + rcc_twist_desired); //NEW FOR REMOTE CENTER OF COMPLIANCE
 		if(!freeze_mode) des_twist += des_cart_acc*dt_;
 		else {
@@ -865,6 +880,9 @@ int main(int argc, char **argv) {
 		x_vec_pub.publish(x_vec_message);
 		y_vec_pub.publish(y_vec_message);
 		z_vec_pub.publish(z_vec_message);
+
+		//pulish freeze mode status
+		freeze_mode_pub.publish(freeze_mode_int);
 
 		if (freeze_mode) timer_counter = 0;
 		else timer_counter = timer_counter + 1;

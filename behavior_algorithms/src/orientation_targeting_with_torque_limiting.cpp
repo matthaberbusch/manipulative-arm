@@ -55,10 +55,10 @@ int main(int argc, char** argv) {
     srv.request.name = "OTTL";
 
     // Declare constants
-    // TARGET_ORIENTATION will change with user input
-    double DT = 0.01, THRESHOLD_TORQUE = 0.4, ROTATE_ANGLE = 0.5, KEEP_CONTACT_ANGLE = 0.1, TARGET_ORIENTATION = 0.05; // Do not increase the virtual attractor angle greater than 1.55 radians
+    // TARGET_ORIENTATION will change with user input        0.5 before
+    double DT = 0.01, THRESHOLD_TORQUE = 0.4, ROTATE_ANGLE = 0.1, KEEP_CONTACT_ANGLE = 0.1, TARGET_ORIENTATION = 0.05; // Do not increase the virtual attractor angle greater than 1.55 radians
     double KEEP_CONTACT_DISTANCE = 0.015;
-    double RUN_TIME = 10;
+    double RUN_TIME = 30;
     double total_number_of_loops = RUN_TIME / DT;
     double loops_so_far = 0;
 

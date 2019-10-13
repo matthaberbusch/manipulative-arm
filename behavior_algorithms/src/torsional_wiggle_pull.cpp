@@ -58,8 +58,8 @@ int main(int argc, char** argv) {
     srv.request.name = "Torsional Wiggle Pull";
 
     // Declare constants
-    double KEEP_CONTACT_DISTANCE = -0.01, DT = 0.01;
-    double WIGGLE_RADIUS = 0.01, WIGGLE_RATE = 3, WIGGLE_TIME = 5;
+    double KEEP_CONTACT_DISTANCE = -0.012, DT = 0.01; //distance was -0.01
+    double WIGGLE_RADIUS = 0.01, WIGGLE_RATE = 0.3, WIGGLE_TIME = 5;
     double current_loop = 0;
     double current_loop_of_state = 0;
     double current_state = 1;

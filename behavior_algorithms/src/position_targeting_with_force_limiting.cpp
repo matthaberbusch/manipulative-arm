@@ -61,9 +61,9 @@ int main(int argc, char** argv) {
 
     // Medicine Bottle params: 
     // Peg in hole params: 
-
-    double PULL_DISTANCE = 0.01, KEEP_CONTACT_DISTANCE = 0.0075, DT = 0.01, FORCE_TRESHOLD = 12, TARGET_DISTANCE = 0.05; // Pull distance was 0.01, force_threshold was 13!
-    double RUN_TIME = 10000;
+                    // was 0.01
+    double PULL_DISTANCE = 0.012, KEEP_CONTACT_DISTANCE = 0.0075, DT = 0.01, FORCE_TRESHOLD = 12, TARGET_DISTANCE = 0.05; // Pull distance was 0.01, force_threshold was 13!
+    double RUN_TIME = 15;
     double total_number_of_loops = RUN_TIME / DT;
     double loops_so_far = 0;
 
@@ -92,7 +92,7 @@ int main(int argc, char** argv) {
 
     if(!strcmp(param_set.c_str(), "Peg")){
         // set the new values here
-        PULL_DISTANCE = 0.01;
+        PULL_DISTANCE = 0.012;
         FORCE_TRESHOLD = 12;
         ROS_INFO("Params set for PEG");
     }
