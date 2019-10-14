@@ -55,8 +55,8 @@ int main(int argc, char** argv) {
     srv.request.name = "OTTL";
 
     // Declare constants
-    // TARGET_ORIENTATION will change with user input        0.5 before
-    double DT = 0.01, THRESHOLD_TORQUE = 0.4, ROTATE_ANGLE = 0.1, KEEP_CONTACT_ANGLE = 0.1, TARGET_ORIENTATION = 0.05; // Do not increase the virtual attractor angle greater than 1.55 radians
+    // TARGET_ORIENTATION will change with user input                         was 0.5 before
+    double DT = 0.01, THRESHOLD_TORQUE = 0.4, FORCE_TRESHOLD = 15, ROTATE_ANGLE = 0.1, KEEP_CONTACT_ANGLE = 0.1, TARGET_ORIENTATION = 0.05; // Do not increase the virtual attractor angle greater than 1.55 radians
     double KEEP_CONTACT_DISTANCE = 0.015;
     double RUN_TIME = 30;
     double total_number_of_loops = RUN_TIME / DT;
@@ -74,21 +74,15 @@ int main(int argc, char** argv) {
 
     // The end effector pose (current_pose) and force torque data (ft_in_robot_frame) are global variables.
 
-    // Get user input
-    // cout << "Enter a rotation to move in radians: ";
-    // cin >> TARGET_ORIENTATION;
-
-    // Replaced user input with cmd line in
-    // ros::NodeHandle n("~"); // refer to the global path to the local parameters
-
     // called and passed in like: 'rosrun behavior_algorithms orientation_targeting_with_torque_limiting _target_orientation:=2'
 
-    // get parameter from server, passed by command line (if nothing passed in, results in default)
+    // get parameter from server, passed by command line (if nothing passed in, results in default, which is the final number)
     nh.param("/orientation_targeting_with_torque_limiting/target_orientation", TARGET_ORIENTATION, 1.57);
     
     // clear parameter from server 
     nh.deleteParam("/orientation_targeting_with_torque_limiting/target_orientation"); 
 
+    // Output what is received 
     ROS_INFO("Output from parameter for target_orientation; %f", TARGET_ORIENTATION);
 
     // With labeled parameter, now call service to send message that program will start
@@ -146,9 +140,21 @@ int main(int argc, char** argv) {
     cout<<"Starting orientation: "<<endl<<start_orientation<<endl;
     cout<<"Target orientation: "<<endl<<target_orientation<<endl;
 
+    // Loop variable to check effort limit condition
+    bool effort_limit_crossed = false;
+    effort_limit_crossed = ((abs(ft_in_robot_frame.torque.x) > THRESHOLD_TORQUE) || (abs(ft_in_robot_frame.torque.y) > THRESHOLD_TORQUE) || (abs(ft_in_robot_frame.torque.z) > THRESHOLD_TORQUE) ||
+                                 (abs(ft_in_robot_frame.force.x) > FORCE_TRESHOLD) || (abs(ft_in_robot_frame.force.y) > FORCE_TRESHOLD) || (abs(ft_in_robot_frame.force.z) > FORCE_TRESHOLD));
+
+
     // Begin loop
     // While we haven't touched anything and haven't reached our target
-    while( (loops_so_far <= total_number_of_loops) && (abs(ft_in_robot_frame.torque.x) < THRESHOLD_TORQUE) && (((current_orientation < target_orientation) && (TARGET_ORIENTATION >= 0)) || ((current_orientation >= target_orientation) && (TARGET_ORIENTATION < 0)))) { 
+    /*
+    Loop End Conditions:
+    1. The operation has timed out (ran the max alloted time)
+    2. The torque (soon to be effort) threshold has been crossed
+    3. The target orientation has been reached
+    */
+    while( (loops_so_far <= total_number_of_loops) && !effort_limit_crossed && (((current_orientation < target_orientation) && (TARGET_ORIENTATION >= 0)) || ((current_orientation >= target_orientation) && (TARGET_ORIENTATION < 0)))) { 
 
         // ROS: for communication between programs
         ros::spinOnce();
@@ -183,15 +189,19 @@ int main(int argc, char** argv) {
         current_orientation = joint_states(5);
         cout<<"Current orientation: "<<endl<<current_orientation<<endl;
 
+        // Check if the effort threshold has been crossed once again (check each force and toque if they cross the threshold, if any do, update and set to true)
+        effort_limit_crossed = ((abs(ft_in_robot_frame.torque.x) > THRESHOLD_TORQUE) || (abs(ft_in_robot_frame.torque.y) > THRESHOLD_TORQUE) || (abs(ft_in_robot_frame.torque.z) > THRESHOLD_TORQUE) ||
+                                 (abs(ft_in_robot_frame.force.x) > FORCE_TRESHOLD) || (abs(ft_in_robot_frame.force.y) > FORCE_TRESHOLD) || (abs(ft_in_robot_frame.force.z) > FORCE_TRESHOLD));
+        
         // Increase counter
         loops_so_far = loops_so_far + 1;
     }
     
     // If we've touched
-    if(abs(ft_in_robot_frame.torque.x) >= THRESHOLD_TORQUE) {
+    if(effort_limit_crossed) {
         // Print message
-        cout<<"Torque threshold crossed"<<endl;
-        srv.request.status = "Torque threshold crossed";
+        cout<<"Effort threshold crossed"<<endl;
+        srv.request.status = "Effort threshold crossed";
         // ROS: for communication between programs
         ros::spinOnce();
 

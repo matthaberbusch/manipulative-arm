@@ -60,6 +60,7 @@ int main(int argc, char** argv) {
     // Declare constants
     double KEEP_CONTACT_DISTANCE = -0.012, DT = 0.01; //distance was -0.01
     double WIGGLE_RADIUS = 0.01, WIGGLE_RATE = 0.3, WIGGLE_TIME = 5;
+    double THRESHOLD_TORQUE = 0.4, FORCE_TRESHOLD = 15;
     double current_loop = 0;
     double current_loop_of_state = 0;
     double current_state = 1;
@@ -155,8 +156,15 @@ int main(int argc, char** argv) {
     // Keep virtual attractor at a distance, to pull the end effector
     virtual_attractor.pose = current_pose;
 
+
+    // Loop variable to check effort limit condition
+    bool effort_limit_crossed = false;
+    effort_limit_crossed = ((abs(ft_in_robot_frame.torque.x) > THRESHOLD_TORQUE) || (abs(ft_in_robot_frame.torque.y) > THRESHOLD_TORQUE) || (abs(ft_in_robot_frame.torque.z) > THRESHOLD_TORQUE) ||
+                                 (abs(ft_in_robot_frame.force.x) > FORCE_TRESHOLD) || (abs(ft_in_robot_frame.force.y) > FORCE_TRESHOLD) || (abs(ft_in_robot_frame.force.z) > FORCE_TRESHOLD));
+
+
     // Start loop
-    while(current_loop <= MAX_LOOPS){
+    while(current_loop <= MAX_LOOPS && !effort_limit_crossed){
 
         // ROS: for communication
         ros::spinOnce();
@@ -228,6 +236,12 @@ int main(int argc, char** argv) {
             virtual_attractor.pose.orientation.w = new_virtual_attractor_quat.w();
             
         }
+
+        // Check the effort thresholds again
+        effort_limit_crossed = ((abs(ft_in_robot_frame.torque.x) > THRESHOLD_TORQUE) || (abs(ft_in_robot_frame.torque.y) > THRESHOLD_TORQUE) || (abs(ft_in_robot_frame.torque.z) > THRESHOLD_TORQUE) ||
+                             (abs(ft_in_robot_frame.force.x) > FORCE_TRESHOLD) || (abs(ft_in_robot_frame.force.y) > FORCE_TRESHOLD) || (abs(ft_in_robot_frame.force.z) > FORCE_TRESHOLD));
+
+
         // Increment counters
         current_loop = current_loop + 1;
         current_loop_of_state = current_loop_of_state + 1;
@@ -239,8 +253,10 @@ int main(int argc, char** argv) {
     virtual_attractor.pose = current_pose;
     virtual_attractor_publisher.publish(virtual_attractor);
     naptime.sleep();
-    
     srv.request.status = "Completed run of specified length";
+    if(effort_limit_crossed){
+        srv.request.status = "Effort Limit Crossed";
+    }
     
     if(client.call(srv)){
         // success

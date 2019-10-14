@@ -11,7 +11,7 @@ import time
 # os trick learned from https://answers.ros.org/question/42849/how-to-launch-a-launch-file-from-python-code/
 
 # Length of the lag between sending and the machine receiving emssage
-delay_len = 4
+delay_len = 0
 
 # List of options for preset values, to be associated with related values in each function
 options = ['Peg', 'Bottle_Cap']

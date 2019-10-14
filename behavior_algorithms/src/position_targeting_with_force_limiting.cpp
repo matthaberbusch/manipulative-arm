@@ -61,8 +61,8 @@ int main(int argc, char** argv) {
 
     // Medicine Bottle params: 
     // Peg in hole params: 
-                    // was 0.01
-    double PULL_DISTANCE = 0.012, KEEP_CONTACT_DISTANCE = 0.0075, DT = 0.01, FORCE_TRESHOLD = 12, TARGET_DISTANCE = 0.05; // Pull distance was 0.01, force_threshold was 13!
+                    // was 0.01                                                                                      0.4 before
+    double PULL_DISTANCE = 0.012, KEEP_CONTACT_DISTANCE = 0.0075, DT = 0.01, FORCE_TRESHOLD = 12, THRESHOLD_TORQUE = 0.6, TARGET_DISTANCE = 0.05; // Pull distance was 0.01, force_threshold was 13! ADDED TORQUE LIMIT
     double RUN_TIME = 15;
     double total_number_of_loops = RUN_TIME / DT;
     double loops_so_far = 0;
@@ -136,10 +136,15 @@ int main(int argc, char** argv) {
     cout<<"Starting position: "<<endl<<start_position<<endl;
     cout<<"Target position: "<<endl<<target_position<<endl;
 
+    // Loop variable to check effort limit condition
+    bool effort_limit_crossed = false;
+    effort_limit_crossed = ((abs(ft_in_robot_frame.torque.x) > THRESHOLD_TORQUE) || (abs(ft_in_robot_frame.torque.y) > THRESHOLD_TORQUE) || (abs(ft_in_robot_frame.torque.z) > THRESHOLD_TORQUE) ||
+                                 (abs(ft_in_robot_frame.force.x) > FORCE_TRESHOLD) || (abs(ft_in_robot_frame.force.y) > FORCE_TRESHOLD) || (abs(ft_in_robot_frame.force.z) > FORCE_TRESHOLD));
+
     // Begin loop
     // Assuming we're always going in the positive x direction.
     // While we haven't touched anything and haven't reached our target
-    while( (loops_so_far <= total_number_of_loops) && (abs(ft_in_robot_frame.force.x) < FORCE_TRESHOLD) && (((abs(current_pose.position.x) < target_position) && (TARGET_DISTANCE >= 0)) || ((abs(current_pose.position.x) >= target_position) && (TARGET_DISTANCE < 0))) ) {
+    while( (loops_so_far <= total_number_of_loops) && !effort_limit_crossed && (((abs(current_pose.position.x) < target_position) && (TARGET_DISTANCE >= 0)) || ((abs(current_pose.position.x) >= target_position) && (TARGET_DISTANCE < 0))) ) {
         // ROS: for communication between programs
         ros::spinOnce();
 
@@ -163,6 +168,10 @@ int main(int argc, char** argv) {
         virtual_attractor_publisher.publish(virtual_attractor);
         naptime.sleep();
 
+        // Update the values for the loop condition
+        effort_limit_crossed = ((abs(ft_in_robot_frame.torque.x) > THRESHOLD_TORQUE) || (abs(ft_in_robot_frame.torque.y) > THRESHOLD_TORQUE) || (abs(ft_in_robot_frame.torque.z) > THRESHOLD_TORQUE) ||
+                                 (abs(ft_in_robot_frame.force.x) > FORCE_TRESHOLD) || (abs(ft_in_robot_frame.force.y) > FORCE_TRESHOLD) || (abs(ft_in_robot_frame.force.z) > FORCE_TRESHOLD));
+
         loops_so_far = loops_so_far + 1;
 
         // Print current position
@@ -170,10 +179,10 @@ int main(int argc, char** argv) {
     }
     
     // If we've touched
-    if(abs(ft_in_robot_frame.force.x) >= FORCE_TRESHOLD) {
+    if(effort_limit_crossed) {
         // Print message
-        cout<<"Force threshold crossed"<<endl;
-        srv.request.status = "Force threshold crossed";
+        cout<<"Effort threshold crossed"<<endl;
+        srv.request.status = "Effort threshold crossed";
         // ROS: for communication between programs
         ros::spinOnce();
 
