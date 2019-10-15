@@ -19,8 +19,7 @@ using namespace std;
 geometry_msgs::Pose current_pose;
 geometry_msgs::PoseStamped virtual_attractor;
 geometry_msgs::Wrench ft_in_robot_frame;
-//NEW
-geometry_msgs::Pose set_attr_pose;
+
 geometry_msgs::Vector3 tool_vector_x;
 geometry_msgs::Vector3 tool_vector_y;
 geometry_msgs::Vector3 tool_vector_z;
@@ -29,41 +28,51 @@ geometry_msgs::Vector3 tool_vector_z;
 void cartesian_state_callback(const geometry_msgs::PoseStamped& cartesian_pose) {
     current_pose = cartesian_pose.pose;
 }
+
 void ft_callback(const geometry_msgs::Wrench& ft_values) {
     // These are not values from the sensor. They are f/t values transformed into robot base frame.
     ft_in_robot_frame = ft_values;
 }
-// NEW
-void set_virt_attr_callback(const geometry_msgs::PoseStamped& set_attr) {
-    set_attr_pose = set_attr.pose;
-}
-void tool_vector_callback(const geometry_msgs::Vector3& tool_vector_msg_z) {
-    tool_vector_z = tool_vector_msg_z;
-}
+
 
 // ROS: main program
 int main(int argc, char** argv) {
     // ROS: for communication between programs
     ros::init(argc,argv,"simple_move_until_touch");
     ros::NodeHandle nh;
-    ros::Subscriber cartesian_state_subscriber = nh.subscribe("cartesian_logger",1, cartesian_state_callback);
-    ros::Subscriber ft_subscriber = nh.subscribe("transformed_ft_wrench",1,ft_callback);
-    ros::Subscriber set_virt_attr = nh.subscribe("set_virt_attr",1,set_virt_attr_callback); //NEW
-    ros::Subscriber tool_vector_sub_z = nh.subscribe("tool_vector_z",1,tool_vector_callback); //NEW
-    ros::Publisher virtual_attractor_publisher = nh.advertise<geometry_msgs::PoseStamped>("Virt_attr_pose",1);
 
+    // Define subscribers used
+    ros::Subscriber cartesian_state_subscriber = nh.subscribe("cartesian_logger",1, cartesian_state_callback); // subscribe to the topic publishing the cartesian state of the end effector
+    ros::Subscriber ft_subscriber = nh.subscribe("transformed_ft_wrench",1,ft_callback);                       // subscribe to the force/torque sensor data
+    ros::Publisher virtual_attractor_publisher = nh.advertise<geometry_msgs::PoseStamped>("Virt_attr_pose",1); // publish the pose of the virtual attractor for the accomodation controller 
+
+    // Services used in conjunction with buffer.cpp to have delayed program status sent to operator
     ros::ServiceClient client = nh.serviceClient<behavior_algorithms::status_service>("status_service");
     ros::ServiceClient client_start = nh.serviceClient<behavior_algorithms::status_service>("start_service");
+    
+    // Service status variable for use with buffer.cpp
     behavior_algorithms::status_service srv;
     srv.request.name = "PTFL_z";
-    // Declare constants
-    // TARGET_DISTANCE will change with user input
 
-    // Medicine Bottle params: 
-    // Peg in hole params: 
-                    // was 0.01                                                                                      0.4 before
-    double PULL_DISTANCE = 0.012, KEEP_CONTACT_DISTANCE = 0.0075, DT = 0.01, FORCE_TRESHOLD = 12, THRESHOLD_TORQUE = 0.6, TARGET_DISTANCE = 0.05; // Pull distance was 0.01, force_threshold was 13! ADDED TORQUE LIMIT
+    /*
+    How to tune params:
+    PULL_DISTANCE: By increasing this, the virtual force is greater, and decreasing decreases it
+    KEEP_CONTACT_DISTANCE: If the effort threshold is crossed, the virtual attractor is placed this distance below the current pose to keep contact if pushing, and above if pulling to keep a constant force
+    DT: Loop rate, how fast each iteration of the loop is (most likely not needed to be changed)
+    FORCE_THRESHOLD: The limit at which the program will stop if the force in the direction which we are moving is crossed
+    NONDIRECTIONAL_FORCE_THRESHOLD: The limit at which the program will stop if the force in the direction which we are not moving is crossed
+    TARGET_DISTANCE: will change with user input, how far and in what direction the end effector moves
+    TORQUE_THRESHOLD: The limit at which the program will stop if the torque threshold is crossed
+    RUN_TIME: How long the program will run before timing out and ending
+
+    PULL_DISTANCE and FORCE_THRESHOLD: Default values defined here, but are modified below depending on GUI setting (Line 98)
+    */
+    double PULL_DISTANCE = 0.012, KEEP_CONTACT_DISTANCE = 0.0075, DT = 0.01, FORCE_THRESHOLD = 12, TARGET_DISTANCE = 0.05; 
+    double NONDIRECTIONAL_FORCE_THRESHOLD = 20; // try 20?
+    double TORQUE_THRESHOLD = 2; // try 2?
     double RUN_TIME = 15;
+
+    // Used in the loop to determine the run time and time out
     double total_number_of_loops = RUN_TIME / DT;
     double loops_so_far = 0;
 
@@ -78,28 +87,25 @@ int main(int argc, char** argv) {
     naptime.sleep();
 
     // The end effector pose (current_pose) and force torque data (ft_in_robot_frame) are global variables.
-
-    // Get user input
-    // cout << "Enter a distance to move in meters: ";
-    // cin >> TARGET_DISTANCE;
     
-    // Get parameter passed in through 
+    // Get parameter passed in 
     nh.param("/simple_move_until_touch/target_distance", TARGET_DISTANCE, 0.03);
     nh.param<std::string>("/simple_move_until_touch/param_set", param_set, "Peg");
     // clear parameter from server 
     nh.deleteParam("/simple_move_until_touch/target_distance"); 
     nh.deleteParam("/simple_move_until_touch/param_set");
 
+    // Here, the values for PULL_DISTANCE and FORCE_THRESHOLD are changed according to what setting the GUI is on for the appropriate task
     if(!strcmp(param_set.c_str(), "Peg")){
         // set the new values here
         PULL_DISTANCE = 0.012;
-        FORCE_TRESHOLD = 12;
+        FORCE_THRESHOLD = 12;
         ROS_INFO("Params set for PEG");
     }
     else if (!strcmp(param_set.c_str(), "Bottle_Cap")){
         // set the other values here
         PULL_DISTANCE = 0.015;
-        FORCE_TRESHOLD = 15;
+        FORCE_THRESHOLD = 15;
         ROS_INFO("Params set for BOTTLE_CAP");
     }
 
@@ -110,8 +116,8 @@ int main(int argc, char** argv) {
     request_status << "target_distance " << TARGET_DISTANCE << "m";
 
     srv.request.status = request_status.str();
-    // ROS_WARN("Request Status: %s", request_status.str().c_str());
 
+    // Call the client start service, used in buffer.cpp for operator output
     if(client_start.call(srv)){
         // success
         cout<<"Called service_start with name succesfully"<<endl;
@@ -138,8 +144,8 @@ int main(int argc, char** argv) {
 
     // Loop variable to check effort limit condition
     bool effort_limit_crossed = false;
-    effort_limit_crossed = ((abs(ft_in_robot_frame.torque.x) > THRESHOLD_TORQUE) || (abs(ft_in_robot_frame.torque.y) > THRESHOLD_TORQUE) || (abs(ft_in_robot_frame.torque.z) > THRESHOLD_TORQUE) ||
-                                 (abs(ft_in_robot_frame.force.x) > FORCE_TRESHOLD) || (abs(ft_in_robot_frame.force.y) > FORCE_TRESHOLD) || (abs(ft_in_robot_frame.force.z) > FORCE_TRESHOLD));
+    effort_limit_crossed = ((abs(ft_in_robot_frame.torque.x) > TORQUE_THRESHOLD) || (abs(ft_in_robot_frame.torque.y) > TORQUE_THRESHOLD) || (abs(ft_in_robot_frame.torque.z) > TORQUE_THRESHOLD) ||
+                                 (abs(ft_in_robot_frame.force.x) > FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.y) > NONDIRECTIONAL_FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.z) > NONDIRECTIONAL_FORCE_THRESHOLD));
 
     // Begin loop
     // Assuming we're always going in the positive x direction.
@@ -169,8 +175,8 @@ int main(int argc, char** argv) {
         naptime.sleep();
 
         // Update the values for the loop condition
-        effort_limit_crossed = ((abs(ft_in_robot_frame.torque.x) > THRESHOLD_TORQUE) || (abs(ft_in_robot_frame.torque.y) > THRESHOLD_TORQUE) || (abs(ft_in_robot_frame.torque.z) > THRESHOLD_TORQUE) ||
-                                 (abs(ft_in_robot_frame.force.x) > FORCE_TRESHOLD) || (abs(ft_in_robot_frame.force.y) > FORCE_TRESHOLD) || (abs(ft_in_robot_frame.force.z) > FORCE_TRESHOLD));
+        effort_limit_crossed = ((abs(ft_in_robot_frame.torque.x) > TORQUE_THRESHOLD) || (abs(ft_in_robot_frame.torque.y) > TORQUE_THRESHOLD) || (abs(ft_in_robot_frame.torque.z) > TORQUE_THRESHOLD) ||
+                                 (abs(ft_in_robot_frame.force.x) > FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.y) > NONDIRECTIONAL_FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.z) > NONDIRECTIONAL_FORCE_THRESHOLD));
 
         loops_so_far = loops_so_far + 1;
 
@@ -178,11 +184,39 @@ int main(int argc, char** argv) {
         // cout<<"Current position: "<<endl<<abs(current_pose.position.x)<<endl;
     }
     
-    // If we've touched
+    // If we've crossed the effort limit
     if(effort_limit_crossed) {
+
         // Print message
-        cout<<"Effort threshold crossed"<<endl;
-        srv.request.status = "Effort threshold crossed";
+        if(abs(ft_in_robot_frame.torque.x) > TORQUE_THRESHOLD){
+            cout<<"X Torque threshold crossed"<<endl;
+            srv.request.status = "X Torque threshold crossed";
+        }
+        else if(abs(ft_in_robot_frame.torque.y) > TORQUE_THRESHOLD){
+            cout<<"Y Torque threshold crossed"<<endl;
+            srv.request.status = "Y Torque threshold crossed";
+        }
+        else if(abs(ft_in_robot_frame.torque.z) > TORQUE_THRESHOLD){
+            cout<<"Z Torque threshold crossed"<<endl;
+            srv.request.status = "Z Torque threshold crossed";
+        }
+        else if(abs(ft_in_robot_frame.force.x) > FORCE_THRESHOLD){
+            cout<<"X Force threshold crossed"<<endl;
+            srv.request.status = "X Force threshold crossed";
+        }
+        else if(abs(ft_in_robot_frame.force.y) > NONDIRECTIONAL_FORCE_THRESHOLD){
+            cout<<"Y Force threshold crossed"<<endl;
+            srv.request.status = "Y Force threshold crossed";
+        }
+        else if(abs(ft_in_robot_frame.force.z) > NONDIRECTIONAL_FORCE_THRESHOLD){
+            cout<<"Z Force threshold crossed"<<endl;
+            srv.request.status = "Z Force threshold crossed";
+        }
+        else{
+            cout<<"Effort threshold crossed"<<endl;
+            srv.request.status = "Effort threshold crossed";
+        }
+
         // ROS: for communication between programs
         ros::spinOnce();
 
@@ -219,6 +253,7 @@ int main(int argc, char** argv) {
         virtual_attractor.pose = current_pose;
     }
 
+    // Call service to send reason for program end to buffer.cpp
     if(client.call(srv)){
         // success
         cout<<"Called service_exit with name succesfully"<<endl;

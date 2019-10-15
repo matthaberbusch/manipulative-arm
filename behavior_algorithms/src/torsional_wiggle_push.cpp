@@ -60,7 +60,7 @@ int main(int argc, char** argv) {
     // Declare constants
     double KEEP_CONTACT_DISTANCE = 0.012, DT = 0.01; //distance was 0.01
     double WIGGLE_RADIUS = 0.01, WIGGLE_RATE = 0.3, WIGGLE_TIME = 5;
-    double THRESHOLD_TORQUE = 0.4, FORCE_TRESHOLD = 15;
+    double TORQUE_THRESHOLD = 2, FORCE_THRESHOLD = 20; // torque was at 0.4, then at 1
     double current_loop = 0;
     double current_loop_of_state = 0;
     double current_state = 1;
@@ -157,13 +157,14 @@ int main(int argc, char** argv) {
 
     // Loop variable to check effort limit condition
     bool effort_limit_crossed = false;
-    effort_limit_crossed = ((abs(ft_in_robot_frame.torque.x) > THRESHOLD_TORQUE) || (abs(ft_in_robot_frame.torque.y) > THRESHOLD_TORQUE) || (abs(ft_in_robot_frame.torque.z) > THRESHOLD_TORQUE) ||
-                                 (abs(ft_in_robot_frame.force.x) > FORCE_TRESHOLD) || (abs(ft_in_robot_frame.force.y) > FORCE_TRESHOLD) || (abs(ft_in_robot_frame.force.z) > FORCE_TRESHOLD));
+    effort_limit_crossed = ((abs(ft_in_robot_frame.torque.x) > TORQUE_THRESHOLD) || (abs(ft_in_robot_frame.torque.y) > TORQUE_THRESHOLD) || (abs(ft_in_robot_frame.torque.z) > TORQUE_THRESHOLD) ||
+                                 (abs(ft_in_robot_frame.force.x) > FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.y) > FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.z) > FORCE_THRESHOLD));
 
     // Start loop
     while(current_loop <= MAX_LOOPS && !effort_limit_crossed){
         ros::spinOnce();
         
+        // IN HERE, INSTEAD OF CHECKING STATES, CHECK IF THE LIMIT WAS CROSSED, IF IT WAS THEN REVERSE THE STATE, KEEP DOING THAT UNTIL TIME RUNS OUT AND REMOVE THE CONDITION FROM ABOVE 
         // If we spent enough time in one state, move to the next
         if(current_loop_of_state >= LOOPS_BETWEEN_STATES){
             if(current_state < STATES){
@@ -230,8 +231,8 @@ int main(int argc, char** argv) {
             virtual_attractor.pose.orientation.w = new_virtual_attractor_quat.w();
         }
 
-        effort_limit_crossed = ((abs(ft_in_robot_frame.torque.x) > THRESHOLD_TORQUE) || (abs(ft_in_robot_frame.torque.y) > THRESHOLD_TORQUE) || (abs(ft_in_robot_frame.torque.z) > THRESHOLD_TORQUE) ||
-                                 (abs(ft_in_robot_frame.force.x) > FORCE_TRESHOLD) || (abs(ft_in_robot_frame.force.y) > FORCE_TRESHOLD) || (abs(ft_in_robot_frame.force.z) > FORCE_TRESHOLD));
+        effort_limit_crossed = ((abs(ft_in_robot_frame.torque.x) > TORQUE_THRESHOLD) || (abs(ft_in_robot_frame.torque.y) > TORQUE_THRESHOLD) || (abs(ft_in_robot_frame.torque.z) > TORQUE_THRESHOLD) ||
+                                 (abs(ft_in_robot_frame.force.x) > FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.y) > FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.z) > FORCE_THRESHOLD));
 
         // Increment counters
         current_loop = current_loop + 1;
@@ -247,7 +248,35 @@ int main(int argc, char** argv) {
 
     srv.request.status = "Completed run of specified length";
     if(effort_limit_crossed){
-        srv.request.status = "Effort Limit Crossed";
+        // Print message
+        if(abs(ft_in_robot_frame.torque.x) > TORQUE_THRESHOLD){
+            cout<<"X Torque threshold crossed"<<endl;
+            srv.request.status = "X Torque threshold crossed";
+        }
+        else if(abs(ft_in_robot_frame.torque.y) > TORQUE_THRESHOLD){
+            cout<<"Y Torque threshold crossed"<<endl;
+            srv.request.status = "Y Torque threshold crossed";
+        }
+        else if(abs(ft_in_robot_frame.torque.z) > TORQUE_THRESHOLD){
+            cout<<"Z Torque threshold crossed"<<endl;
+            srv.request.status = "Z Torque threshold crossed";
+        }
+        else if(abs(ft_in_robot_frame.force.x) > FORCE_THRESHOLD){
+            cout<<"X Force threshold crossed"<<endl;
+            srv.request.status = "X Force threshold crossed";
+        }
+        else if(abs(ft_in_robot_frame.force.y) > FORCE_THRESHOLD){
+            cout<<"Y Force threshold crossed"<<endl;
+            srv.request.status = "Y Force threshold crossed";
+        }
+        else if(abs(ft_in_robot_frame.force.z) > FORCE_THRESHOLD){
+            cout<<"Z Force threshold crossed"<<endl;
+            srv.request.status = "Z Force threshold crossed";
+        }
+        else{
+            cout<<"Effort threshold crossed"<<endl;
+            srv.request.status = "Effort threshold crossed";
+        }
     }
     
     if(client.call(srv)){

@@ -68,7 +68,7 @@ int main(int argc, char** argv) {
     // TARGET_DISTANCE will change with user input
     double KEEP_CONTACT_DISTANCE = 0.01, DT = 0.01;
     double WIGGLE_RADIUS = 0.01, WIGGLE_RATE = 3, WIGGLE_TIME = 5;
-    double THRESHOLD_TORQUE = 0.4, FORCE_TRESHOLD = 15;
+    double TORQUE_THRESHOLD = 0.4, FORCE_THRESHOLD = 15;
     double current_loop = 0;
     double current_loop_of_state = 0;
     double current_state = 1;
@@ -128,8 +128,8 @@ int main(int argc, char** argv) {
 
     // Loop variable to check effort limit condition
     bool effort_limit_crossed = false;
-    effort_limit_crossed = ((abs(ft_in_robot_frame.torque.x) > THRESHOLD_TORQUE) || (abs(ft_in_robot_frame.torque.y) > THRESHOLD_TORQUE) || (abs(ft_in_robot_frame.torque.z) > THRESHOLD_TORQUE) ||
-                                 (abs(ft_in_robot_frame.force.x) > FORCE_TRESHOLD) || (abs(ft_in_robot_frame.force.y) > FORCE_TRESHOLD) || (abs(ft_in_robot_frame.force.z) > FORCE_TRESHOLD));
+    effort_limit_crossed = ((abs(ft_in_robot_frame.torque.x) > TORQUE_THRESHOLD) || (abs(ft_in_robot_frame.torque.y) > TORQUE_THRESHOLD) || (abs(ft_in_robot_frame.torque.z) > TORQUE_THRESHOLD) ||
+                                 (abs(ft_in_robot_frame.force.x) > FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.y) > FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.z) > FORCE_THRESHOLD));
 
     // Start main Loop
     while(current_loop <= MAX_LOOPS && !effort_limit_crossed){
@@ -171,8 +171,8 @@ int main(int argc, char** argv) {
             virtual_attractor.pose.position.z = current_pose.position.z + tool_vector_y.z * 1 * WIGGLE_RADIUS + tool_vector_z.z * KEEP_CONTACT_DISTANCE;
         }
 
-        effort_limit_crossed = ((abs(ft_in_robot_frame.torque.x) > THRESHOLD_TORQUE) || (abs(ft_in_robot_frame.torque.y) > THRESHOLD_TORQUE) || (abs(ft_in_robot_frame.torque.z) > THRESHOLD_TORQUE) ||
-                                 (abs(ft_in_robot_frame.force.x) > FORCE_TRESHOLD) || (abs(ft_in_robot_frame.force.y) > FORCE_TRESHOLD) || (abs(ft_in_robot_frame.force.z) > FORCE_TRESHOLD));
+        effort_limit_crossed = ((abs(ft_in_robot_frame.torque.x) > TORQUE_THRESHOLD) || (abs(ft_in_robot_frame.torque.y) > TORQUE_THRESHOLD) || (abs(ft_in_robot_frame.torque.z) > TORQUE_THRESHOLD) ||
+                                 (abs(ft_in_robot_frame.force.x) > FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.y) > FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.z) > FORCE_THRESHOLD));
 
         // Increment counters
         current_loop = current_loop + 1;
@@ -188,10 +188,40 @@ int main(int argc, char** argv) {
     naptime.sleep();
 
     srv.request.status = "Completed run of specified length";
+
     if(effort_limit_crossed){
-        srv.request.status = "Effort Limit Crossed";
+
+        // Print message
+        if(abs(ft_in_robot_frame.torque.x) > TORQUE_THRESHOLD){
+            cout<<"X Torque threshold crossed"<<endl;
+            srv.request.status = "X Torque threshold crossed";
+        }
+        else if(abs(ft_in_robot_frame.torque.y) > TORQUE_THRESHOLD){
+            cout<<"Y Torque threshold crossed"<<endl;
+            srv.request.status = "Y Torque threshold crossed";
+        }
+        else if(abs(ft_in_robot_frame.torque.z) > TORQUE_THRESHOLD){
+            cout<<"Z Torque threshold crossed"<<endl;
+            srv.request.status = "Z Torque threshold crossed";
+        }
+        else if(abs(ft_in_robot_frame.force.x) > FORCE_THRESHOLD){
+            cout<<"X Force threshold crossed"<<endl;
+            srv.request.status = "X Force threshold crossed";
+        }
+        else if(abs(ft_in_robot_frame.force.y) > FORCE_THRESHOLD){
+            cout<<"Y Force threshold crossed"<<endl;
+            srv.request.status = "Y Force threshold crossed";
+        }
+        else if(abs(ft_in_robot_frame.force.z) > FORCE_THRESHOLD){
+            cout<<"Z Force threshold crossed"<<endl;
+            srv.request.status = "Z Force threshold crossed";
+        }
+        else{
+            cout<<"Effort threshold crossed"<<endl;
+            srv.request.status = "Effort threshold crossed";
+        }
     }
-    
+
     if(client.call(srv)){
         // success
         cout<<"Called service with name succesfully"<<endl;
