@@ -1,6 +1,6 @@
 // Rotate until torque with Orientation Targeting and Torque Limiting (PTFL)
-// Matthew Haberbusch and Surag Balajepalli 
-// Last updated 6/18/19
+// Matthew Haberbusch, Surag Balajepalli, and Rahul Pokharna 
+// Last updated 10/15/19
 // 
 // All ROS-specific code labeled with "ROS:" comments
 
@@ -44,18 +44,34 @@ int main(int argc, char** argv) {
     // ROS: for communication between programs
     ros::init(argc,argv,"orientation_targeting_with_torque_limiting");
     ros::NodeHandle nh;
-    ros::Subscriber cartesian_state_subscriber = nh.subscribe("cartesian_logger",1, cartesian_state_callback);
-    ros::Subscriber ft_subscriber = nh.subscribe("transformed_ft_wrench",1,ft_callback);
-    ros::Publisher virtual_attractor_publisher = nh.advertise<geometry_msgs::PoseStamped>("Virt_attr_pose",1);
-    ros::Subscriber joint_state_sub = nh.subscribe("abb120_joint_state",1,jointStateCallback);
 
+    // ROS: Define subscribers and publishers used
+    ros::Subscriber cartesian_state_subscriber = nh.subscribe("cartesian_logger",1, cartesian_state_callback); // subscribe to the topic publishing the cartesian state of the end effector
+    ros::Subscriber ft_subscriber = nh.subscribe("transformed_ft_wrench",1,ft_callback);                       // subscribe to the force/torque sensor data
+    ros::Subscriber joint_state_sub = nh.subscribe("abb120_joint_state",1,jointStateCallback);                 // subscribe to the state of joints to get the orientation of the end effector for rotation
+    ros::Publisher virtual_attractor_publisher = nh.advertise<geometry_msgs::PoseStamped>("Virt_attr_pose",1); // publish the pose of the virtual attractor for the accomodation controller 
+
+    // ROS: Services used in conjunction with buffer.cpp to have delayed program status sent to operator
     ros::ServiceClient client = nh.serviceClient<behavior_algorithms::status_service>("status_service");
     ros::ServiceClient client_start = nh.serviceClient<behavior_algorithms::status_service>("start_service");
+
+    // ROS: Service status variable for use with buffer.cpp
     behavior_algorithms::status_service srv;
     srv.request.name = "OTTL";
 
     // Declare constants
-    // TARGET_ORIENTATION will change with user input                         was 0.5 before
+    /*
+    How to tune params:
+    PULL_DISTANCE: By increasing this, the virtual force is greater, and decreasing decreases it
+    KEEP_CONTACT_DISTANCE: If the effort threshold is crossed, the virtual attractor is placed this distance below the current pose to keep contact if pushing, and above if pulling to keep a constant force
+    FORCE_THRESHOLD: The limit at which the program will stop if the force in the direction which we are moving is crossed
+    TORQUE_THRESHOLD: The limit at which the program will stop if the torque threshold is crossed
+    RUN_TIME: How long the program will run before timing out and ending
+
+    Params not needed to be tuned: 
+    DT: Loop rate, how fast each iteration of the loop is (most likely not needed to be changed)
+    TARGET_ORIENTATION: will change with user input, how far and in what direction the end effector moves
+    */
     double DT = 0.01, TORQUE_THRESHOLD = 0.4, FORCE_THRESHOLD = 15, ROTATE_ANGLE = 0.1, KEEP_CONTACT_ANGLE = 0.1, TARGET_ORIENTATION = 0.05; // Do not increase the virtual attractor angle greater than 1.55 radians
     double KEEP_CONTACT_DISTANCE = 0.015;
     double RUN_TIME = 30;
@@ -74,9 +90,9 @@ int main(int argc, char** argv) {
 
     // The end effector pose (current_pose) and force torque data (ft_in_robot_frame) are global variables.
 
-    // called and passed in like: 'rosrun behavior_algorithms orientation_targeting_with_torque_limiting _target_orientation:=2'
+    // This program is called and parameters are passed in like: 'rosrun behavior_algorithms orientation_targeting_with_torque_limiting _target_orientation:=2' where the number is the number of radians to rotate
 
-    // get parameter from server, passed by command line (if nothing passed in, results in default, which is the final number)
+    // ROS: get parameter from server, passed by command line (if nothing passed in, results in default, which is the final number)
     nh.param("/orientation_targeting_with_torque_limiting/target_orientation", TARGET_ORIENTATION, 1.57);
     
     // clear parameter from server 
@@ -90,8 +106,8 @@ int main(int argc, char** argv) {
     request_status << "target_orientation " << TARGET_ORIENTATION << " radians";
 
     srv.request.status = request_status.str();
-    // ROS_WARN("Request Status: %s", request_status.str().c_str());
 
+    // ROS: Call the client start service, used in buffer.cpp for operator output
     if(client_start.call(srv)){
         // success
         cout<<"Called service_start with name succesfully"<<endl;
@@ -147,11 +163,10 @@ int main(int argc, char** argv) {
 
 
     // Begin loop
-    // While we haven't touched anything and haven't reached our target
     /*
     Loop End Conditions:
     1. The operation has timed out (ran the max alloted time)
-    2. The torque (soon to be effort) threshold has been crossed
+    2. One of the effort thresholds has been crossed
     3. The target orientation has been reached
     */
     while( (loops_so_far <= total_number_of_loops) && !effort_limit_crossed && (((current_orientation < target_orientation) && (TARGET_ORIENTATION >= 0)) || ((current_orientation >= target_orientation) && (TARGET_ORIENTATION < 0)))) { 
@@ -197,7 +212,7 @@ int main(int argc, char** argv) {
         loops_so_far = loops_so_far + 1;
     }
     
-    // If we've crossed the effort limits
+    // If we've crossed the effort limits, check which is crossed for the status output
     if(effort_limit_crossed) {
 
         // Print message
@@ -301,6 +316,7 @@ int main(int argc, char** argv) {
         virtual_attractor.pose = current_pose;
     }
 
+    // ROS: Call service to send reason for program end to buffer.cpp
     if(client.call(srv)){
         // success
         cout<<"Called service with name succesfully"<<endl;

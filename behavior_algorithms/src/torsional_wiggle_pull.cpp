@@ -1,6 +1,6 @@
 // Torsional Wiggle
-// Matthew Haberbusch and Surag Balajepalli 
-// Last updated 8/7/19
+// Matthew Haberbusch, Surag Balajepalli, and Rahul Pokharna 
+// Last updated 10/15/19
 // 
 // All ROS-specific code labeled with "ROS:" comments
 
@@ -21,22 +21,18 @@ using namespace std;
 geometry_msgs::Pose current_pose;
 geometry_msgs::PoseStamped virtual_attractor;
 geometry_msgs::Wrench ft_in_robot_frame;
-geometry_msgs::Pose set_attr_pose;
-geometry_msgs::Vector3 tool_vector_x;
-geometry_msgs::Vector3 tool_vector_y;
 geometry_msgs::Vector3 tool_vector_z;
 
 // ROS: callback functions for how we receive data
 void cartesian_state_callback(const geometry_msgs::PoseStamped& cartesian_pose) {
     current_pose = cartesian_pose.pose;
 }
+
 void ft_callback(const geometry_msgs::Wrench& ft_values) {
     // These are not values from the sensor. They are f/t values transformed into robot base frame.
     ft_in_robot_frame = ft_values;
 }
-void set_virt_attr_callback(const geometry_msgs::PoseStamped& set_attr) {
-    set_attr_pose = set_attr.pose;
-}
+
 void tool_vector_z_callback(const geometry_msgs::Vector3& tool_vector_msg_z) {
     tool_vector_z = tool_vector_msg_z;
 }
@@ -46,26 +42,46 @@ int main(int argc, char** argv) {
     // ROS: for communication between programs
     ros::init(argc,argv,"torsional_wiggle_pull");
     ros::NodeHandle nh;
-    ros::Subscriber cartesian_state_subscriber = nh.subscribe("cartesian_logger",1, cartesian_state_callback);
-    ros::Subscriber ft_subscriber = nh.subscribe("transformed_ft_wrench",1,ft_callback);
-    ros::Subscriber set_virt_attr = nh.subscribe("set_virt_attr",1,set_virt_attr_callback);
-    ros::Subscriber tool_vector_sub_z = nh.subscribe("tool_vector_z",1,tool_vector_z_callback);
-    ros::Publisher virtual_attractor_publisher = nh.advertise<geometry_msgs::PoseStamped>("Virt_attr_pose",1);
 
+    // ROS: Define subscribers and publishers for the program
+    ros::Subscriber cartesian_state_subscriber = nh.subscribe("cartesian_logger",1, cartesian_state_callback); // subscribe to the topic publishing the cartesian state of the end effector
+    ros::Subscriber ft_subscriber = nh.subscribe("transformed_ft_wrench",1,ft_callback);                       // subscribe to the force/torque sensor data
+    ros::Subscriber tool_vector_sub_z = nh.subscribe("tool_vector_z",1,tool_vector_z_callback);                // subscribe to the value of the tool vector in the z, published from the accomodation controller
+    ros::Publisher virtual_attractor_publisher = nh.advertise<geometry_msgs::PoseStamped>("Virt_attr_pose",1); // publish the pose of the virtual attractor for the accomodation controller 
+
+    // ROS: Services used in conjunction with buffer.cpp to have delayed program status sent to operator
     ros::ServiceClient client = nh.serviceClient<behavior_algorithms::status_service>("status_service");
     ros::ServiceClient client_start = nh.serviceClient<behavior_algorithms::status_service>("start_service");
+    
+    // ROS: Service status variable for use with buffer.cpp
     behavior_algorithms::status_service srv;
     srv.request.name = "Torsional Wiggle Pull";
 
     // Declare constants
-    double KEEP_CONTACT_DISTANCE = -0.012, DT = 0.01; //distance was -0.01
+    /*
+    How to tune params:
+    MOVE_DISTANCE: The distance between the end effector and the virtual attractor in the axis of pull but not the rotation, keep negative as it is a pull, increase absolute value for greater force, decrease for lesser force
+    FORCE_THRESHOLD: The limit at which the program will stop if the force threshold is crossed
+    TORQUE_THRESHOLD: The limit at which the program will stop if the torque threshold is crossed
+    WIGGLE_RADIUS: Radius of the wiggle, increase for larger virtual circle that the end effector follows
+    WIGGLE_RATE: The rate at which the cycles for each wiggle is completed, increase the number to have more wiggles per second
+    ROTATE_ANGLE: Increase this to increase the amount of pull (up until pi/2 rads) [range of (0, pi/2) ]
+
+    Params not needed to be tuned:
+    DT: Loop rate, how fast each iteration of the loop is (most likely not needed to be changed)
+    WIGGLE_TIME: How long the program will run before timing out and ending, defined by user input, but has a default value of 5
+
+    */
+    double MOVE_DISTANCE = -0.012, DT = 0.01; 
     double WIGGLE_RADIUS = 0.01, WIGGLE_RATE = 0.3, WIGGLE_TIME = 5;
     double TORQUE_THRESHOLD = 2, FORCE_THRESHOLD = 20;
+    double ROTATE_ANGLE = 0.5;
+    
+    // Parameters for use in loop
     double current_loop = 0;
     double current_loop_of_state = 0;
     double current_state = 1;
     double STATES = 2;
-    double ROTATE_ANGLE = 0.5;
 
     // ROS: for loop rate
     ros::Rate naptime(1/DT);
@@ -76,13 +92,9 @@ int main(int argc, char** argv) {
 
     // The end effector pose (current_pose) and force torque data (ft_in_robot_frame) are global variables.
 
-    // Get user input
-    // cout << "Enter an amount of time to wiggle in seconds: ";
-    // cin >> WIGGLE_TIME;
-
+    // ROS: get parameter from server, passed by command line (if nothing passed in, results in default, which is the final number)
     nh.param("/torsional_wiggle_pull/wiggle_time", WIGGLE_TIME, 5.0); 
 
-    
     // clear parameter from server 
     nh.deleteParam("/torsional_wiggle_pull/wiggle_time"); 
     
@@ -93,8 +105,8 @@ int main(int argc, char** argv) {
     request_status << "runtime " << WIGGLE_TIME << " seconds";
 
     srv.request.status = request_status.str();
-    // ROS_WARN("Request Status: %s", request_status.str().c_str());
 
+    // ROS: Call the client start service, used in buffer.cpp for operator output
     if(client_start.call(srv)){
         // success
         cout<<"Called service_start with name succesfully"<<endl;
@@ -156,16 +168,18 @@ int main(int argc, char** argv) {
     // Keep virtual attractor at a distance, to pull the end effector
     virtual_attractor.pose = current_pose;
 
-
     // Loop variable to check effort limit condition
     bool effort_limit_crossed = false;
     effort_limit_crossed = ((abs(ft_in_robot_frame.torque.x) > TORQUE_THRESHOLD) || (abs(ft_in_robot_frame.torque.y) > TORQUE_THRESHOLD) || (abs(ft_in_robot_frame.torque.z) > TORQUE_THRESHOLD) ||
                                  (abs(ft_in_robot_frame.force.x) > FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.y) > FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.z) > FORCE_THRESHOLD));
 
-
     // Start loop
+    /*
+    Loop End Conditions:
+    1. The operation has timed out (ran the max alloted time)
+    2. One of the effort thresholds has been crossed
+    */
     while(current_loop <= MAX_LOOPS && !effort_limit_crossed){
-
         // ROS: for communication
         ros::spinOnce();
 
@@ -190,9 +204,9 @@ int main(int argc, char** argv) {
             current_pose_quat.w() = current_pose.orientation.w;
 
             // Keep the robot pulling up
-            virtual_attractor.pose.position.x = current_pose.position.x + tool_vector_z.x * KEEP_CONTACT_DISTANCE;
-            virtual_attractor.pose.position.y = current_pose.position.y + tool_vector_z.y * KEEP_CONTACT_DISTANCE;
-            virtual_attractor.pose.position.z = current_pose.position.z + tool_vector_z.z * KEEP_CONTACT_DISTANCE;
+            virtual_attractor.pose.position.x = current_pose.position.x + tool_vector_z.x * MOVE_DISTANCE;
+            virtual_attractor.pose.position.y = current_pose.position.y + tool_vector_z.y * MOVE_DISTANCE;
+            virtual_attractor.pose.position.z = current_pose.position.z + tool_vector_z.z * MOVE_DISTANCE;
 
             // Convert current pose quaternion to Euler Angles
             current_pose_rot = current_pose_quat.normalized().toRotationMatrix();
@@ -218,9 +232,9 @@ int main(int argc, char** argv) {
             current_pose_quat.w() = current_pose.orientation.w;
 
             // Keep the robot pulling up
-            virtual_attractor.pose.position.x = current_pose.position.x + tool_vector_z.x * KEEP_CONTACT_DISTANCE;
-            virtual_attractor.pose.position.y = current_pose.position.y + tool_vector_z.y * KEEP_CONTACT_DISTANCE;
-            virtual_attractor.pose.position.z = current_pose.position.z + tool_vector_z.z * KEEP_CONTACT_DISTANCE;
+            virtual_attractor.pose.position.x = current_pose.position.x + tool_vector_z.x * MOVE_DISTANCE;
+            virtual_attractor.pose.position.y = current_pose.position.y + tool_vector_z.y * MOVE_DISTANCE;
+            virtual_attractor.pose.position.z = current_pose.position.z + tool_vector_z.z * MOVE_DISTANCE;
 
             // Convert current pose quaternion to Euler Angles
             current_pose_rot = current_pose_quat.normalized().toRotationMatrix();
@@ -256,7 +270,7 @@ int main(int argc, char** argv) {
 
     srv.request.status = "Completed run of specified length";
     
-    // If we've crossed the effort limit
+    // If we've crossed the effort limts, check which is crossed for the status output
     if(effort_limit_crossed){
     
         // Print message
@@ -290,6 +304,7 @@ int main(int argc, char** argv) {
         }
     }
     
+    // ROS: Call service to send reason for program end to buffer.cpp
     if(client.call(srv)){
         // success
         cout<<"Called service with name succesfully"<<endl;
