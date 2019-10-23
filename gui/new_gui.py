@@ -8,8 +8,6 @@ import ttk
 import os
 import time
 
-# os trick learned from https://answers.ros.org/question/42849/how-to-launch-a-launch-file-from-python-code/
-
 # Length of the lag between sending and the machine receiving emssage
 delay_len = 0
 
@@ -39,9 +37,11 @@ class Application(tk.Frame):
         self.master.title('Skills GUI')
         self.tab_control = ttk.Notebook(self.master)
         self.motion_control = ttk.Frame(self.tab_control)
+        self.orientation_control = ttk.Frame(self.tab_control)
         self.wiggle_control = ttk.Frame(self.tab_control)
 
         self.tab_control.add(self.motion_control, text='Motion Control')
+        self.tab_control.add(self.orientation_control, text='Orientation Control')
         self.tab_control.add(self.wiggle_control, text='Wiggle Control')
 
     # Pack and display the tabs
@@ -88,8 +88,8 @@ class Application(tk.Frame):
                 sticky=tk.NSEW, pady=5, padx=2)
 
 
-        # Force Moment Accomodation
-
+        # Force Moment Accomodation (Present in both motion and orientation control tabs)
+        # MOTION CONTROL FMA
         self.force_moment_acc_label = tk.Label(self.motion_control,
                 text='Force Moment Accomodation:',
                 font='Courier 20 bold')
@@ -120,73 +120,233 @@ class Application(tk.Frame):
         self.force_moment_acc_preset_2.grid(row=1, column=2,
                 sticky=tk.NSEW, pady=5, padx=2)
 
-        # Orientation Targeting w/ Torque Limit
-
-        self.orientation_targ_torque_limit_label = \
-            tk.Label(self.motion_control,
-                     text='Orientation Targeting w/ Torque Limit:',
-                     font='Courier 20 bold')
-        self.orientation_targ_torque_limit_label.grid(row=2, column=0,
-                sticky=tk.NSEW, pady=5, padx=2)
-
-        self.orientation_targ_torque_limit = \
-            tk.Button(self.motion_control, text='text in', fg='blue',
-                      command=self.orientation_targ_torque_limit,
-                      font='Courier 20 bold')
-        self.orientation_targ_torque_limit.grid(row=2, column=1,
-                sticky=tk.NSEW, pady=5, padx=2)
-
-        # Preset 1
-
-        self.orientation_targ_torque_limit_pre_1 = \
-            tk.Button(self.motion_control, text='pi/2 rads', fg='blue',
-                      command=self.orientation_targ_torque_limit_pre_1,
-                      font='Courier 20 bold')
-        self.orientation_targ_torque_limit_pre_1.grid(row=2, column=2,
-                sticky=tk.NSEW, pady=5, padx=2)
-
-        # Preset 3
-
-        self.orientation_targ_torque_limit_pre_3 = \
-            tk.Button(self.motion_control, text='-pi/2 rads', fg='blue'
-                      ,
-                      command=self.orientation_targ_torque_limit_pre_3,
-                      font='Courier 20 bold')
-        self.orientation_targ_torque_limit_pre_3.grid(row=2, column=3,
-                sticky=tk.NSEW, pady=5, padx=2)
-
-        # Position Targeting w/ Force Limit
-
-        self.position_targ_force_limit_label = \
-            tk.Label(self.motion_control,
-                     text='Position Targeting w/ Force Limit:',
-                     font='Courier 20 bold')
-        self.position_targ_force_limit_label.grid(row=3, column=0,
-                sticky=tk.NSEW, pady=5, padx=2)
-
-        self.position_targ_force_limit = tk.Button(self.motion_control,
-                text='text in', fg='blue',
-                command=self.position_targ_force_limit,
+        # ORIENTATION CONTROL FMA
+        self.force_moment_acc_label_oc = tk.Label(self.orientation_control,
+                text='Force Moment Accomodation:',
                 font='Courier 20 bold')
-        self.position_targ_force_limit.grid(row=3, column=1,
+        self.force_moment_acc_label_oc.grid(row=1, column=0,
+                sticky=tk.NSEW, pady=5, padx=2)
+
+        self.force_moment_acc_oc = tk.Button(self.orientation_control,
+                text='text in', fg='blue',
+                command=self.force_moment_acc, font='Courier 20 bold')
+        self.force_moment_acc_oc.grid(row=1, column=1, sticky=tk.NSEW,
+                                   pady=5, padx=2)
+
+        # Preset Value 1
+        self.force_moment_acc_preset_1_oc = tk.Button(self.orientation_control,
+                text='10 sec', fg='blue',
+                command=self.force_moment_acc_preset_1,
+                font='Courier 20 bold')
+        self.force_moment_acc_preset_1_oc.grid(row=1, column=3,
+                sticky=tk.NSEW, pady=5, padx=2)
+
+        # Preset Value 2
+        self.force_moment_acc_preset_2_oc = tk.Button(self.orientation_control,
+                text='5 sec', fg='blue',
+                command=self.force_moment_acc_preset_2,
+                font='Courier 20 bold')
+        self.force_moment_acc_preset_2_oc.grid(row=1, column=2,
+                sticky=tk.NSEW, pady=5, padx=2)
+
+
+        # Orientation Targeting w/ Effort Limit
+
+        # original Orientation (in the x)
+        self.orientation_targ_effort_limit_label_x = \
+            tk.Label(self.orientation_control,
+                     text='Orientation Targeting w/ Effort Limit in x:',
+                     font='Courier 20 bold')
+        self.orientation_targ_effort_limit_label_x.grid(row=2, column=0,
+                sticky=tk.NSEW, pady=5, padx=2)
+
+        self.orientation_targ_effort_limit_x = \
+            tk.Button(self.orientation_control, text='text in', fg='blue',
+                      command=self.orientation_targ_effort_limit_x,
+                      font='Courier 20 bold')
+        self.orientation_targ_effort_limit_x.grid(row=2, column=1,
+                sticky=tk.NSEW, pady=5, padx=2)
+
+        # Preset 1
+        self.orientation_targ_effort_limit_pre_1_x = \
+            tk.Button(self.orientation_control, text='pi/2 rads', fg='blue',
+                      command=self.orientation_targ_effort_limit_pre_1_x,
+                      font='Courier 20 bold')
+        self.orientation_targ_effort_limit_pre_1_x.grid(row=2, column=2,
+                sticky=tk.NSEW, pady=5, padx=2)
+
+        # Preset 2
+        self.orientation_targ_effort_limit_pre_2_x = \
+            tk.Button(self.orientation_control, text='-pi/2 rads', fg='blue',
+                      command=self.orientation_targ_effort_limit_pre_2_x,
+                      font='Courier 20 bold')
+        self.orientation_targ_effort_limit_pre_2_x.grid(row=2, column=3,
+                sticky=tk.NSEW, pady=5, padx=2)
+
+        # Orientation Targeting w/ Effort Limit (In the y)
+        self.orientation_targ_effort_limit_label_y = \
+            tk.Label(self.orientation_control,
+                     text='Orientation Targeting in y:',
+                     font='Courier 20 bold')
+        self.orientation_targ_effort_limit_label_y.grid(row=3, column=0,
+                sticky=tk.NSEW, pady=5, padx=2)
+
+        self.orientation_targ_effort_limit_y = \
+            tk.Button(self.orientation_control, text='text in', fg='blue',
+                      command=self.orientation_targ_effort_limit_y,
+                      font='Courier 20 bold')
+        self.orientation_targ_effort_limit_y.grid(row=3, column=1,
+                sticky=tk.NSEW, pady=5, padx=2)
+
+        # Preset 1
+        self.orientation_targ_effort_limit_pre_1_y = \
+            tk.Button(self.orientation_control, text='pi/2 rads', fg='blue',
+                      command=self.orientation_targ_effort_limit_pre_1_y,
+                      font='Courier 20 bold')
+        self.orientation_targ_effort_limit_pre_1_y.grid(row=3, column=2,
+                sticky=tk.NSEW, pady=5, padx=2)
+
+        # Preset 2
+
+        self.orientation_targ_effort_limit_pre_2_y = \
+            tk.Button(self.orientation_control, text='-pi/2 rads', fg='blue',
+                      command=self.orientation_targ_effort_limit_pre_2_y,
+                      font='Courier 20 bold')
+        self.orientation_targ_effort_limit_pre_2_y.grid(row=3, column=3,
+                sticky=tk.NSEW, pady=5, padx=2)
+
+        # Orientation Targeting w/ Effort Limit (In the z)
+        self.orientation_targ_effort_limit_label_z = \
+            tk.Label(self.orientation_control,
+                     text='Orientation Targeting in z:',
+                     font='Courier 20 bold')
+        self.orientation_targ_effort_limit_label_z.grid(row=4, column=0,
+                sticky=tk.NSEW, pady=5, padx=2)
+
+        self.orientation_targ_effort_limit_z = \
+            tk.Button(self.orientation_control, text='text in', fg='blue',
+                      command=self.orientation_targ_effort_limit_z,
+                      font='Courier 20 bold')
+        self.orientation_targ_effort_limit_z.grid(row=4, column=1,
+                sticky=tk.NSEW, pady=5, padx=2)
+
+        # Preset 1
+        self.orientation_targ_effort_limit_pre_1_z = \
+            tk.Button(self.orientation_control, text='pi/2 rads', fg='blue',
+                      command=self.orientation_targ_effort_limit_pre_1_z,
+                      font='Courier 20 bold')
+        self.orientation_targ_effort_limit_pre_1_z.grid(row=4, column=2,
+                sticky=tk.NSEW, pady=5, padx=2)
+
+        # Preset 2
+
+        self.orientation_targ_effort_limit_pre_2_z = \
+            tk.Button(self.orientation_control, text='-pi/2 rads', fg='blue',
+                      command=self.orientation_targ_effort_limit_pre_2_z,
+                      font='Courier 20 bold')
+        self.orientation_targ_effort_limit_pre_2_z.grid(row=4, column=3,
+                sticky=tk.NSEW, pady=5, padx=2)
+
+
+        # Position Targeting w/ Effort Limit
+
+        # PTEL x
+        self.position_targ_effort_limit_label_x = \
+            tk.Label(self.motion_control,
+                     text='Position Targeting w/ Effort Limit in x:',
+                     font='Courier 20 bold')
+        self.position_targ_effort_limit_label_x.grid(row=2, column=0,
+                sticky=tk.NSEW, pady=5, padx=2)
+
+        self.position_targ_effort_limit_x = tk.Button(self.motion_control,
+                text='text in', fg='blue',
+                command=self.position_targ_effort_limit_x,
+                font='Courier 20 bold')
+        self.position_targ_effort_limit_x.grid(row=2, column=1,
                 sticky=tk.NSEW, pady=5, padx=2)
 
         # Preset 1
 
-        self.position_targ_force_limit_pre_1 = \
+        self.position_targ_effort_limit_pre_1_x = \
             tk.Button(self.motion_control, text='0.03 m', fg='blue',
-                      command=self.position_targ_force_limit_pre_1,
+                      command=self.position_targ_effort_limit_pre_1_x,
                       font='Courier 20 bold')
-        self.position_targ_force_limit_pre_1.grid(row=3, column=2,
+        self.position_targ_effort_limit_pre_1_x.grid(row=2, column=2,
                 sticky=tk.NSEW, pady=5, padx=2)
 
-        # Preset 3
+        # Preset 2
 
-        self.position_targ_force_limit_pre_3 = \
+        self.position_targ_effort_limit_pre_2_x = \
             tk.Button(self.motion_control, text='-0.03 m', fg='blue',
-                      command=self.position_targ_force_limit_pre_3,
+                      command=self.position_targ_effort_limit_pre_2_x,
                       font='Courier 20 bold')
-        self.position_targ_force_limit_pre_3.grid(row=3, column=3,
+        self.position_targ_effort_limit_pre_2_x.grid(row=2, column=3,
+                sticky=tk.NSEW, pady=5, padx=2)
+
+        # PTEL y
+        self.position_targ_effort_limit_label_y = \
+            tk.Label(self.motion_control,
+                     text='PTEL in y:',
+                     font='Courier 20 bold')
+        self.position_targ_effort_limit_label_y.grid(row=3, column=0,
+                sticky=tk.NSEW, pady=5, padx=2)
+
+        self.position_targ_effort_limit_y = tk.Button(self.motion_control,
+                text='text in', fg='blue',
+                command=self.position_targ_effort_limit_y,
+                font='Courier 20 bold')
+        self.position_targ_effort_limit_y.grid(row=3, column=1,
+                sticky=tk.NSEW, pady=5, padx=2)
+
+        # Preset 1
+
+        self.position_targ_effort_limit_pre_1_y = \
+            tk.Button(self.motion_control, text='0.03 m', fg='blue',
+                      command=self.position_targ_effort_limit_pre_1_y,
+                      font='Courier 20 bold')
+        self.position_targ_effort_limit_pre_1_y.grid(row=3, column=2,
+                sticky=tk.NSEW, pady=5, padx=2)
+
+        # Preset 2
+
+        self.position_targ_effort_limit_pre_2_y = \
+            tk.Button(self.motion_control, text='-0.03 m', fg='blue',
+                      command=self.position_targ_effort_limit_pre_2_y,
+                      font='Courier 20 bold')
+        self.position_targ_effort_limit_pre_2_y.grid(row=3, column=3,
+                sticky=tk.NSEW, pady=5, padx=2)
+
+        # PTEL z
+        self.position_targ_effort_limit_label_z = \
+            tk.Label(self.motion_control,
+                     text='PTEL in z:',
+                     font='Courier 20 bold')
+        self.position_targ_effort_limit_label_z.grid(row=4, column=0,
+                sticky=tk.NSEW, pady=5, padx=2)
+
+        self.position_targ_effort_limit_z = tk.Button(self.motion_control,
+                text='text in', fg='blue',
+                command=self.position_targ_effort_limit_z,
+                font='Courier 20 bold')
+        self.position_targ_effort_limit_z.grid(row=4, column=1,
+                sticky=tk.NSEW, pady=5, padx=2)
+
+        # Preset 1
+
+        self.position_targ_effort_limit_pre_1_z = \
+            tk.Button(self.motion_control, text='0.03 m', fg='blue',
+                      command=self.position_targ_effort_limit_pre_1_z,
+                      font='Courier 20 bold')
+        self.position_targ_effort_limit_pre_1_z.grid(row=4, column=2,
+                sticky=tk.NSEW, pady=5, padx=2)
+
+        # Preset 2
+
+        self.position_targ_effort_limit_pre_2_z = \
+            tk.Button(self.motion_control, text='-0.03 m', fg='blue',
+                      command=self.position_targ_effort_limit_pre_2_z,
+                      font='Courier 20 bold')
+        self.position_targ_effort_limit_pre_2_z.grid(row=4, column=3,
                 sticky=tk.NSEW, pady=5, padx=2)
 
         # Torsional Wiggle Pull
@@ -327,8 +487,8 @@ class Application(tk.Frame):
 
         self.pack()
 
-    def say_hi(self):
-        print 'hi there, everyone!'
+    # def say_hi(self):
+    #     print 'hi there, everyone!'
 
     def clear_text(self):
 
@@ -374,7 +534,8 @@ class Application(tk.Frame):
 
     # rosrun behavior_algorithms orientation_targeting_with_torque_limiting _target_orientation:=2
 
-    def orientation_targ_torque_limit(self):
+    # In the x
+    def orientation_targ_effort_limit_x(self):
 
         # print("Here, i run a command using os, skill 2")
 
@@ -390,7 +551,7 @@ class Application(tk.Frame):
         os.system(command)  # would be replaced by rosrun pkg node
         time.sleep(delay_len)
 
-    def orientation_targ_torque_limit_pre_1(self):
+    def orientation_targ_effort_limit_pre_1_x(self):
 
         # print("Here, i run a command using os, skill 2")
 
@@ -399,16 +560,7 @@ class Application(tk.Frame):
                   )  # would be replaced by rosrun pkg node
         time.sleep(delay_len)
 
-    def orientation_targ_torque_limit_pre_2(self):
-
-        # print("Here, i run a command using os, skill 1")
-
-        time.sleep(delay_len)
-        os.system('rosrun behavior_algorithms orientation_targeting_with_torque_limiting _target_orientation:=1'
-                  )  # would be replaced by rosrun pkg node
-        time.sleep(delay_len)
-
-    def orientation_targ_torque_limit_pre_3(self):
+    def orientation_targ_effort_limit_pre_2_x(self):
 
         # print("Here, i run a command using os, skill 2")
 
@@ -417,18 +569,81 @@ class Application(tk.Frame):
                   )  # would be replaced by rosrun pkg node
         time.sleep(delay_len)
 
-    def orientation_targ_torque_limit_pre_4(self):
 
-        # print("Here, i run a command using os, skill 1")
+    def orientation_targ_effort_limit_y(self):
+
+        # print("Here, i run a command using os, skill 2")
+
+        command = \
+            'rosrun behavior_algorithms orientation_targeting_with_torque_limiting'
+        orientation = self.parse_entry()
+        if orientation != 0:
+            command = command + ' _target_orientation:=%f' % orientation
+
+        # print(command)
 
         time.sleep(delay_len)
-        os.system('rosrun behavior_algorithms orientation_targeting_with_torque_limiting _target_orientation:=-1'
+        os.system(command)  # would be replaced by rosrun pkg node
+        time.sleep(delay_len)
+
+    def orientation_targ_effort_limit_pre_1_y(self):
+
+        # print("Here, i run a command using os, skill 2")
+
+        time.sleep(delay_len)
+        os.system('rosrun behavior_algorithms orientation_targeting_with_torque_limiting _target_orientation:=1.57'
                   )  # would be replaced by rosrun pkg node
         time.sleep(delay_len)
 
-    # rosrun behavior_algorithms orientation_targeting_with_torque_limiting _target_orientation:=2
+    def orientation_targ_effort_limit_pre_2_y(self):
 
-    def position_targ_force_limit(self):
+        # print("Here, i run a command using os, skill 2")
+
+        time.sleep(delay_len)
+        os.system('rosrun behavior_algorithms orientation_targeting_with_torque_limiting _target_orientation:=-1.57'
+                  )  # would be replaced by rosrun pkg node
+        time.sleep(delay_len)
+
+
+    def orientation_targ_effort_limit_z(self):
+
+        # print("Here, i run a command using os, skill 2")
+
+        command = \
+            'rosrun behavior_algorithms orientation_targeting_with_torque_limiting'
+        orientation = self.parse_entry()
+        if orientation != 0:
+            command = command + ' _target_orientation:=%f' % orientation
+
+        # print(command)
+
+        time.sleep(delay_len)
+        os.system(command)  # would be replaced by rosrun pkg node
+        time.sleep(delay_len)
+
+    def orientation_targ_effort_limit_pre_1_z(self):
+
+        # print("Here, i run a command using os, skill 2")
+
+        time.sleep(delay_len)
+        os.system('rosrun behavior_algorithms orientation_targeting_with_torque_limiting _target_orientation:=1.57'
+                  )  # would be replaced by rosrun pkg node
+        time.sleep(delay_len)
+
+    def orientation_targ_effort_limit_pre_2_z(self):
+
+        # print("Here, i run a command using os, skill 2")
+
+        time.sleep(delay_len)
+        os.system('rosrun behavior_algorithms orientation_targeting_with_torque_limiting _target_orientation:=-1.57'
+                  )  # would be replaced by rosrun pkg node
+        time.sleep(delay_len)
+
+
+    # rosrun behavior_algorithms orientation_targeting_with_torque_limiting _target_orientation:=2
+    
+    # PTEL in x
+    def position_targ_effort_limit_x(self):
 
         # print("Here, i run a command using os, skill 2")
 
@@ -445,29 +660,78 @@ class Application(tk.Frame):
         os.system(command)  # would be replaced by rosrun pkg node
         time.sleep(delay_len)
 
-    def position_targ_force_limit_pre_1(self):
+    def position_targ_effort_limit_pre_1_x(self):
         time.sleep(delay_len)
         command = 'rosrun behavior_algorithms position_targeting_with_force_limiting _target_distance:=0.03 _param_set:=' + self.parameter_set.get()
         os.system(command)  # would be replaced by rosrun pkg node
         time.sleep(delay_len)
 
-    def position_targ_force_limit_pre_2(self):
-        time.sleep(delay_len)
-        os.system('rosrun behavior_algorithms position_targeting_with_force_limiting _target_distance:=0.03'
-                  )  # would be replaced by rosrun pkg node
-        time.sleep(delay_len)
-
-    def position_targ_force_limit_pre_3(self):
+    def position_targ_effort_limit_pre_2_x(self):
         time.sleep(delay_len)
         command = 'rosrun behavior_algorithms position_targeting_with_force_limiting _target_distance:=-0.03 _param_set:=' + self.parameter_set.get()
         os.system(command)
         time.sleep(delay_len)
 
-    def position_targ_force_limit_pre_4(self):
+    # PTEL in y
+    def position_targ_effort_limit_y(self):
+
+        # print("Here, i run a command using os, skill 2")
+
+        command = \
+            'rosrun behavior_algorithms position_targeting_with_force_limiting'
+        target_distance = self.parse_entry()
+        if target_distance != 0:
+            command = command + ' _target_distance:=%f' \
+                % target_distance
+
+        print(command)
+        command = command + ' _param_set:=' + self.parameter_set.get()
         time.sleep(delay_len)
-        os.system('rosrun behavior_algorithms position_targeting_with_force_limiting _target_distance:=-0.03'
-                  )  # would be replaced by rosrun pkg node
+        os.system(command)  # would be replaced by rosrun pkg node
         time.sleep(delay_len)
+
+    def position_targ_effort_limit_pre_1_y(self):
+        time.sleep(delay_len)
+        command = 'rosrun behavior_algorithms position_targeting_with_force_limiting _target_distance:=0.03 _param_set:=' + self.parameter_set.get()
+        os.system(command)  # would be replaced by rosrun pkg node
+        time.sleep(delay_len)
+
+    def position_targ_effort_limit_pre_2_y(self):
+        time.sleep(delay_len)
+        command = 'rosrun behavior_algorithms position_targeting_with_force_limiting _target_distance:=-0.03 _param_set:=' + self.parameter_set.get()
+        os.system(command)
+        time.sleep(delay_len)
+
+    # PTEL in z
+    def position_targ_effort_limit_z(self):
+
+        # print("Here, i run a command using os, skill 2")
+
+        command = \
+            'rosrun behavior_algorithms position_targeting_with_force_limiting'
+        target_distance = self.parse_entry()
+        if target_distance != 0:
+            command = command + ' _target_distance:=%f' \
+                % target_distance
+
+        print(command)
+        command = command + ' _param_set:=' + self.parameter_set.get()
+        time.sleep(delay_len)
+        os.system(command)  # would be replaced by rosrun pkg node
+        time.sleep(delay_len)
+
+    def position_targ_effort_limit_pre_1_z(self):
+        time.sleep(delay_len)
+        command = 'rosrun behavior_algorithms position_targeting_with_force_limiting _target_distance:=0.03 _param_set:=' + self.parameter_set.get()
+        os.system(command)  # would be replaced by rosrun pkg node
+        time.sleep(delay_len)
+
+    def position_targ_effort_limit_pre_2_z(self):
+        time.sleep(delay_len)
+        command = 'rosrun behavior_algorithms position_targeting_with_force_limiting _target_distance:=-0.03 _param_set:=' + self.parameter_set.get()
+        os.system(command)
+        time.sleep(delay_len)
+
 
     # rosrun behavior_algorithms torsional_wiggle_pull _wiggle_time:=6
 
