@@ -73,8 +73,8 @@ int main(int argc, char** argv) {
     PULL_DISTANCE and FORCE_THRESHOLD: Default values defined here, but are modified below depending on GUI setting (Line 98)
     */
     double PULL_DISTANCE = 0.012, KEEP_CONTACT_DISTANCE = 0.0075, DT = 0.01, FORCE_THRESHOLD = 12, TARGET_DISTANCE = 0.05; 
-    double NONDIRECTIONAL_FORCE_THRESHOLD = 20; // try 20?
-    double TORQUE_THRESHOLD = 2; // try 2?
+    double NONDIRECTIONAL_FORCE_THRESHOLD = 20;
+    double TORQUE_THRESHOLD = 2;
     double RUN_TIME = 15;
 
     // Used in the loop to determine the run time and time out

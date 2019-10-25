@@ -35,7 +35,7 @@ Eigen::VectorXd frozen_joint_states_ = Eigen::VectorXd::Zero(6);
 Eigen::VectorXd wrench_body_coords_ = Eigen::VectorXd::Zero(6);
 Eigen::VectorXd joint_states_ = Eigen::VectorXd::Zero(6);
 Eigen::VectorXd virtual_attractor_pos(3);
-Eigen::Matrix3d virtual_attractor_rot;
+Eigen::Matrix3d virtual_attractor_rotation_matrix;
 Eigen::Quaterniond virt_quat;
 
 bool virtual_attractor_established = false; 
@@ -160,7 +160,7 @@ void virtualAttractorCallback(const geometry_msgs::PoseStamped& des_pose) {
 	virt_quat.z() = des_pose.pose.orientation.z;
 			
 	//seperately filling out the 3x3 rotation matrix
-	virtual_attractor_rot = virt_quat.normalized().toRotationMatrix();
+	virtual_attractor_rotation_matrix = virt_quat.normalized().toRotationMatrix();
 }
 
 // ROS: Callback funtion called with freeze_service is called; toggles freezemode and sets frozen joint states
@@ -332,11 +332,8 @@ int main(int argc, char **argv) {
 	
 	// Main loop
 	while(ros::ok()) {
-		// subscribers get info
+		// ROS: Subscribers get info
 		ros::spinOnce();
-
-
-
 
 		// Initialize jacobians 
 		// TODO CHANGE FOR ROBOT AGNOSTIC
@@ -349,18 +346,13 @@ int main(int argc, char **argv) {
 		if(!lu_jac.isInvertible()) continue; // Jump to the next iteration in the loop if inverse is not defined
 		Eigen::MatrixXd jacobian_inv = lu_jac.inverse(); // TODO what to do when matrix is non invertible?   
 		Eigen::MatrixXd jacobian_transpose = jacobian.transpose();
-		
 
-
-
-		// find current end effector pose
+		// Find current end effector pose
 		current_end_effector_pose.head(3) = tool_with_respect_to_robot.translation();
 		current_end_effector_pose.tail(3) = decompose_rot_mat(tool_with_respect_to_robot.linear()); 
 		Eigen::Quaterniond flange_quat(tool_with_respect_to_robot.linear());
 
-
-
-		// NEW find current z vector for movement relative to tool
+		// Find tool's current x, y, and vector for use in skills 
 		tool_R = tool_with_respect_to_robot.linear();
 		Eigen::Vector3d x_vec = tool_R.col(0);
 		Eigen::Vector3d y_vec = tool_R.col(1);
@@ -375,91 +367,100 @@ int main(int argc, char **argv) {
 		z_vec_message.y = z_vec(1);
 		z_vec_message.z = z_vec(2);
 
+		// Update wrench with respect to robot
 		wrench_with_respect_to_robot.head(3) = sensor_with_respect_to_robot.linear() * (wrench_body_coords_.head(3));
 		wrench_with_respect_to_robot.tail(3) = sensor_with_respect_to_robot.linear() * (wrench_body_coords_.tail(3));
-
-		// NEW Virtual attractor pose based on force felt
-		bumpless_virtual_attractor_position = -wrench_with_respect_to_robot.head(3) / K_virtual_translational + current_end_effector_pose.head(3);
 		
 		// Compute virtual attractor forces
 		// If the controller has just started, use the bumpless virtual attractor
 		if (!freeze_mode && first_loop_after_freeze) {
-
+			// Find bumpless virtual attractor position: the negative force devided by the translational spring constant, plus the end effector position
+			bumpless_virtual_attractor_position = -wrench_with_respect_to_robot.head(3) / K_virtual_translational + current_end_effector_pose.head(3);
+			// Update virtual attractor position to bumpless virtual attractor position
 			virtual_attractor_pos(0) = bumpless_virtual_attractor_position(0);
 			virtual_attractor_pos(1) = bumpless_virtual_attractor_position(1);
 			virtual_attractor_pos(2) = bumpless_virtual_attractor_position(2);
+			// Find bumpless virtual attractor angles: (the negative torque divided by the anglular spring constant) plus (the angle of the tool with respect to the robot)
 			bumpless_virtual_attractor_angles(0) =  -wrench_with_respect_to_robot(3) / K_virtual_angular + decompose_rot_mat(tool_with_respect_to_robot.linear())(0);
 			bumpless_virtual_attractor_angles(1) =  -wrench_with_respect_to_robot(4) / K_virtual_angular + decompose_rot_mat(tool_with_respect_to_robot.linear())(1);
 			bumpless_virtual_attractor_angles(2) =  -wrench_with_respect_to_robot(5) / K_virtual_angular + decompose_rot_mat(tool_with_respect_to_robot.linear())(2);
-			virtual_attractor_rot = rotation_matrix_from_euler_angles(bumpless_virtual_attractor_angles);
+			// Update the virtual attractor rotation matrix
+			virtual_attractor_rotation_matrix = rotation_matrix_from_euler_angles(bumpless_virtual_attractor_angles);
 
+			// Calculate the virtual forces
 			virtual_force.head(3) = K_virtual_translational * (virtual_attractor_pos - current_end_effector_pose.head(3));
-			virtual_force.tail(3) = K_virtual_angular * (delta_phi_from_rots(tool_with_respect_to_robot.linear(), virtual_attractor_rot));//bumpless_virtual_attractor_position.tail(3); // K_virtual_angular * (delta_phi_from_rots(tool_with_respect_to_robot.linear(), virtual_attractor_rot));
+			virtual_force.tail(3) = K_virtual_angular * (delta_phi_from_rots(tool_with_respect_to_robot.linear(), virtual_attractor_rotation_matrix));
+			// Output 
 			cout<<"Bumpless attractor used"<<endl;
 			cout<<"wrench torques"<<endl<<wrench_with_respect_to_robot.tail(3)<<endl;
 			cout<<"decomposed angles of the tool frame"<<endl<<decompose_rot_mat(tool_with_respect_to_robot.linear())<<endl;
 			cout<<"bumpless virtual attractor pose: "<<endl;
 			cout<<bumpless_virtual_attractor_position<<endl;
-
 		}
 
-		// Otherwise do what the controller usually does
+		// If the controller has not just started, use the normal virtual attractor
 		else {
 			// If we have established a virtual attractor
 			if(virtual_attractor_established) {
+				// Calculate the virtual forces
 				virtual_force.head(3) = K_virtual_translational * (virtual_attractor_pos - current_end_effector_pose.head(3));
-				virtual_force.tail(3) = K_virtual_angular * (delta_phi_from_rots(tool_with_respect_to_robot.linear(), virtual_attractor_rot));
+				virtual_force.tail(3) = K_virtual_angular * (delta_phi_from_rots(tool_with_respect_to_robot.linear(), virtual_attractor_rotation_matrix));
+				// Output
 				cout<<"virtual attractor pose"<<endl;
 				cout<<virtual_attractor_pos<<endl;
-				cout<<"bumpless virtual attractor pose: "<<endl;
-				cout<<bumpless_virtual_attractor_position<<endl;
 			}
+			// If we haven't established a virtual attractor
 			else{
-				virtual_force<<0,0,0,0,0,0; // this only prevents errors at startup, not if you cut the skill in the middle
+				// Set virtual force to 0
+				virtual_force<<0,0,0,0,0,0;
 				cout<<"No virtual attractor command received"<<endl;	
 			}
 		}
 
 		cout<<"virtual force: "<<endl<<virtual_force<<endl;
 
-		// Make temporary twist to have the head and tail be affected by the gain, B-virt for the rot and trans
-		// -B_virt * desired_twist converted to use two gains
-
 		// CONTROL LAW BEGIN
+		// Calculate the desired twists with the two damping gains
 		desired_twist_with_gain.head(3) = -B_virtual_translational * desired_twist.head(3);
 		desired_twist_with_gain.tail(3) = -B_virtual_rotational * desired_twist.tail(3);
-		desired_cartesian_acceleration = inertia_matrix_inverted*(desired_twist_with_gain + wrench_with_respect_to_robot + virtual_force); //	used to be desired_cartesian_acceleration = inertia_matrix_inverted*(-B_virt * desired_twist + wrench_with_respect_to_robot + virtual_force);
+		// Calculate the desired cartesian accelleration
+		desired_cartesian_acceleration = inertia_matrix_inverted*(desired_twist_with_gain + wrench_with_respect_to_robot + virtual_force);
 		// CONTROL LAW END
 
+		// Calculate the desired twist by integrating the acceleration
 		if(!freeze_mode) desired_twist += desired_cartesian_acceleration*dt_;
+		// Zero the twist if freeze/latched mode is on
 		else {
 			desired_twist<<0,0,0,0,0,0;
+			// Output
 			cout<<"freeze mode on"<<endl;
 		}
 
+		// Calculate the desired joint velocities from the desired twist
+		// TODO CHANGE FOR ROBOT AGNOSTIC
 		// This is where it is not robot agnostic, if you want to change the robot, change the jacobian accordingly
 		if(!freeze_mode) desired_joint_velocity = jacobian_inv*desired_twist;
 		else desired_joint_velocity<<0,0,0,0,0,0;
 									
-		//ensure that desired joint vel is within set safe limits
+		// Ensure that desired joint vel is within set safe limits
 		if(desired_joint_velocity.norm() > MAX_JOINT_VELOCITY_NORM) desired_joint_velocity = (desired_joint_velocity / desired_joint_velocity.norm()) * MAX_JOINT_VELOCITY_NORM;
 		
-		//euler one step integration to calculate position from velocities
+		// Calculate joint positions from velocities using Euler one step integration
 		Eigen::MatrixXd des_jnt_pos = Eigen::VectorXd::Zero(6);
 		if(!freeze_mode) des_jnt_pos = joint_states_ + (desired_joint_velocity * dt_);
 		else des_jnt_pos = frozen_joint_states_;
 
-		// put velocity and pososition commands into Jointstate message
-		for(int i = 0; i < 6; i++) desired_joint_state.position[i] = std::round(des_jnt_pos(i) * 1000) /1000; //implement low pass filter here instead
+		// Put velocity and pososition commands into Jointstate message and round
+		for(int i = 0; i < 6; i++) desired_joint_state.position[i] = std::round(des_jnt_pos(i) * 1000) /1000; 
 		for(int i = 0; i < 6; i++) desired_joint_state.velocity[i] = std::round(desired_joint_velocity(i) * 1000) /1000;
 
-		//Publish desired jointstate
+		// Publish desired jointstate
 		arm_publisher.publish(desired_joint_state);
 		last_desired_joint_state_ = desired_joint_state;
 
 		cout<<"Current EE Pose:"<<endl<<current_end_effector_pose<<endl;
 
-		// publish cartesian coordinates of robot end effector
+		// Publish cartesian coordinates of robot end effector
 		cartesian_log.pose.position.x = current_end_effector_pose(0);
 		cartesian_log.pose.position.y = current_end_effector_pose(1);
 		cartesian_log.pose.position.z = current_end_effector_pose(2);
@@ -470,8 +471,7 @@ int main(int argc, char **argv) {
 		cartesian_log.header.stamp = ros::Time::now();
 		cart_log_pub.publish(cartesian_log);
 
-		// publish coordinates of virtual attractor
-		// TODO these are cartesian as well? or in robot frame?
+		// Publish virtual attractor coordinates
 		virtual_attractor_log.pose.position.x = virtual_attractor_pos(0);
 		virtual_attractor_log.pose.position.y = virtual_attractor_pos(1);
 		virtual_attractor_log.pose.position.z = virtual_attractor_pos(2);
@@ -483,6 +483,7 @@ int main(int argc, char **argv) {
 		virtual_attractor_after_tf.publish(virtual_attractor_log);
 
 		//publish coordinates of bumpless virtual attractor
+		/*
 		bumpless_virtual_attractor_log.pose.position.x = bumpless_virtual_attractor_position(0);
 		bumpless_virtual_attractor_log.pose.position.y = bumpless_virtual_attractor_position(1);
 		bumpless_virtual_attractor_log.pose.position.z = bumpless_virtual_attractor_position(2);
@@ -492,8 +493,9 @@ int main(int argc, char **argv) {
 		bumpless_virtual_attractor_log.pose.orientation.z = 0;
 		bumpless_virtual_attractor_log.header.stamp = ros::Time::now();
 		bumpless_virtual_attractor_after_tf.publish(bumpless_virtual_attractor_log);
-			
-		//publishing force torque values transformed into robot frame
+		*/
+
+		// Publish force-torque values transformed into robot frame
 		transformed_wrench.force.x = wrench_with_respect_to_robot(0);
 		transformed_wrench.force.y = wrench_with_respect_to_robot(1);
 		transformed_wrench.force.z = wrench_with_respect_to_robot(2);
@@ -502,18 +504,19 @@ int main(int argc, char **argv) {
 		transformed_wrench.torque.z = wrench_with_respect_to_robot(5);
 		ft_pub.publish(transformed_wrench);
 
-		// NEW publish z vector
+		// Publish tool frame vectors
 		x_vec_pub.publish(x_vec_message);
 		y_vec_pub.publish(y_vec_message);
 		z_vec_pub.publish(z_vec_message);
 
-		//pulish freeze mode status
+		// Pulish freeze mode status
 		freeze_mode_pub.publish(freeze_mode_status);
 
+		// Set freeze/latched mode checkers
 		if (freeze_mode) first_loop_after_freeze = true;
 		else first_loop_after_freeze = false;
 
-		// this ensures update rate is consistent 
+		// Ensure update rate is consistent 
 		naptime.sleep();
 		ros::spinOnce();
 	}
