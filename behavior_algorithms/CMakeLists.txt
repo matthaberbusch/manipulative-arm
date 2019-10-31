@@ -143,10 +143,13 @@ add_executable(cap_off src/cap_off.cpp)
 add_executable(cap_on src/cap_on.cpp)
 add_executable(quat_to_euler_ang_converter src/quat_to_euler_ang_converter.cpp)
 add_executable(simple_move_until_touch src/simple_move_until_touch.cpp)
-add_executable(position_targeting_with_force_limiting src/position_targeting_with_force_limiting.cpp)
-add_executable(position_targeting_with_force_limiting_x src/position_targeting_with_force_limiting_x.cpp)
-add_executable(position_targeting_with_force_limiting_y src/position_targeting_with_force_limiting_y.cpp)
+add_executable(position_targeting_effort_limiting_x src/position_targeting_effort_limiting_x.cpp)
+add_executable(position_targeting_effort_limiting_y src/position_targeting_effort_limiting_y.cpp)
+add_executable(position_targeting_effort_limiting_z src/position_targeting_effort_limiting_z.cpp)
 add_executable(orientation_targeting_with_torque_limiting src/orientation_targeting_with_torque_limiting.cpp)
+add_executable(orientation_targeting_effort_limiting_x src/orientation_targeting_effort_limiting_x.cpp)
+add_executable(orientation_targeting_effort_limiting_y src/orientation_targeting_effort_limiting_y.cpp)
+add_executable(orientation_targeting_effort_limiting_z src/orientation_targeting_effort_limiting_z.cpp)
 add_executable(force_moment_accommodation src/force_moment_accommodation.cpp)
 add_executable(translational_wiggle_push src/translational_wiggle_push.cpp)
 add_executable(torsional_wiggle_push src/torsional_wiggle_push.cpp)
@@ -185,16 +188,25 @@ target_link_libraries(quat_to_euler_ang_converter
  target_link_libraries(simple_move_until_touch
    ${catkin_LIBRARIES}
  )
-  target_link_libraries(position_targeting_with_force_limiting
+   target_link_libraries(position_targeting_effort_limiting_x
    ${catkin_LIBRARIES}
  )
-   target_link_libraries(position_targeting_with_force_limiting_x
+   target_link_libraries(position_targeting_effort_limiting_y
    ${catkin_LIBRARIES}
  )
-   target_link_libraries(position_targeting_with_force_limiting_y
+   target_link_libraries(position_targeting_effort_limiting_z
    ${catkin_LIBRARIES}
  )
    target_link_libraries(orientation_targeting_with_torque_limiting
+   ${catkin_LIBRARIES}
+ )
+   target_link_libraries(orientation_targeting_effort_limiting_x
+   ${catkin_LIBRARIES}
+ )
+   target_link_libraries(orientation_targeting_effort_limiting_y
+   ${catkin_LIBRARIES}
+ )
+   target_link_libraries(orientation_targeting_effort_limiting_z
    ${catkin_LIBRARIES}
  )
     target_link_libraries(force_moment_accommodation

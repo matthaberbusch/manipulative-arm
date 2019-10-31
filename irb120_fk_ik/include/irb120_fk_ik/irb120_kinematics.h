@@ -40,7 +40,9 @@ const double DH_d2 = 0.0;
 const double DH_d3 = 0.0;
 const double DH_d4 = 0.302;
 const double DH_d5 = 0.0;
-const double DH_d6 = 0.072 + 0.08 + 0.1 + 0; // plus sensor, plus tool, plus RCC FOR REMOTE CENTER OF COMPLIANCE 7/21/19 //0.072
+const double DH_d6 = 0.072 + 0.08 + 0 + 0; // plus sensor, plus tool, plus RCC FOR REMOTE CENTER OF COMPLIANCE 7/21/19 //0.072
+//was const double DH_d6 = 0.072 + 0.08 + 0.1 + 0; on 10/31/19
+
 
 //robot.DH.alpha= '[-pi/2 0 -pi/2 pi/2 -pi/2 0]';
 const double DH_alpha1 = -M_PI/2.0;

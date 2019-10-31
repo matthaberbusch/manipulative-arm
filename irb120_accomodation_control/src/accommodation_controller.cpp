@@ -46,6 +46,18 @@ geometry_msgs::Vector3 x_vec_message;
 geometry_msgs::Vector3 y_vec_message;
 geometry_msgs::Vector3 z_vec_message;
 
+// Declare variables of task frame vectors for skills to use. 
+geometry_msgs::Vector3 x_vec_task_message_;
+geometry_msgs::Vector3 y_vec_task_message_;
+geometry_msgs::Vector3 z_vec_task_message_;
+
+// Declare variables for task frame vectors
+Eigen::Affine3d task_frame_with_respect_to_robot_;
+Eigen::MatrixXd task_frame_rotation_matrix_;
+Eigen::Vector3d x_vec_task_;
+Eigen::Vector3d y_vec_task_;
+Eigen::Vector3d z_vec_task_;
+
 // MATH: Function converts a rotation matrix to a vector of angles (phi_x, phi_y, phi_z)
 Eigen::Vector3d decompose_rot_mat(Eigen::Matrix3d rot_mat) {
 	Eigen::Vector3d vec_of_angles;
@@ -192,6 +204,29 @@ bool freezeServiceCallback(irb120_accomodation_control::freeze_serviceRequest &r
 	return true;
 }
 
+// in progress 10/29/19
+/*
+bool setTaskFrameCallback(irb120_accomodation_control::set_task_frameRequest &request, irb120_accomodation_control::set_task_frameResponse &response) {
+	// Find tool's current x, y, and vector for use in skills 
+	task_frame_rotation_matrix_ = task_frame_with_respect_to_robot.linear();
+	x_vec_task_ = task_frame_rotation_matrix_.col(0);
+	y_vec_task_ = task_frame_rotation_matrix_.col(1);
+	z_vec_task_ = task_frame_rotation_matrix_.col(2);
+	x_vec_task_message_.x = x_vec_task_(0);
+	x_vec_task_message_.y = x_vec_task_(1);
+	x_vec_task_message_.z = x_vec_task_(2);
+	y_vec_task_message_.x = y_vec_task_(0);
+	y_vec_task_message_.y = y_vec_task_(1);
+	y_vec_task_message_.z = y_vec_task_(2);
+	z_vec_task_message_.x = z_vec_task_(0);
+	z_vec_task_message_.y = z_vec_task_(1);
+	z_vec_task_message_.z = z_vec_task_(2);
+
+	response.status = "task frame set"
+}
+*/
+
+
 // Main rogram
 int main(int argc, char **argv) {
 	// ROS: for communication
@@ -213,7 +248,10 @@ int main(int argc, char **argv) {
 	ros::Publisher x_vec_pub = nh.advertise<geometry_msgs::Vector3>("tool_vector_x",1); // ROS: Publish the tool coordinate frame's x vector in the robot coordinate frame
 	ros::Publisher y_vec_pub = nh.advertise<geometry_msgs::Vector3>("tool_vector_y",1); // ROS: Publish the tool coordinate frame's y vector in the robot coordinate frame
 	ros::Publisher z_vec_pub = nh.advertise<geometry_msgs::Vector3>("tool_vector_z",1); // ROS: Publish the tool coordinate frame's z vector in the robot coordinate frame
-	
+	ros::Publisher x_vec_task_pub = nh.advertise<geometry_msgs::Vector3>("task_vector_x",1); // ROS: Publish the task coordinate frame's x vector in the robot coordinate frame
+	ros::Publisher y_vec_task_pub = nh.advertise<geometry_msgs::Vector3>("task_vector_y",1); // ROS: Publish the task coordinate frame's y vector in the robot coordinate frame
+	ros::Publisher z_vec_task_pub = nh.advertise<geometry_msgs::Vector3>("task_vector_z",1); // ROS: Publish the task coordinate frame's z vector in the robot coordinate frame
+
 	// ROS: Service to toggle freeze mode
 	ros::ServiceServer freeze_service = nh.advertiseService("freeze_service",freezeServiceCallback);
 
@@ -287,7 +325,7 @@ int main(int argc, char **argv) {
 	Eigen::Affine3d tool_with_repsect_to_sensor;
 	Eigen::Matrix3d tool_with_repsect_to_sensor_rotation = Eigen::Matrix3d::Identity();
 	Eigen::Vector3d tool_with_repsect_to_sensor_translation;
-	tool_with_repsect_to_sensor_translation<<0,0,0.1; // 0,0,0.05 is old one
+	tool_with_repsect_to_sensor_translation<<0,0,0; // 0,0,0.1 is old one
 	tool_with_repsect_to_sensor.linear() = tool_with_repsect_to_sensor_rotation;
 	tool_with_repsect_to_sensor.translation() = tool_with_repsect_to_sensor_translation;
 	
@@ -296,10 +334,11 @@ int main(int argc, char **argv) {
 	while(!jnt_state_update) ros::spinOnce();
 
 	// Initialize current end effector position and use values recieved from hand controller as offsets to that value
-	// TODO remove hand controller stuff before sending to NASA?
+
 	Eigen::Affine3d flange_with_respect_to_robot = irb120_fwd_solver.fwd_kin_solve(joint_states_);
 	Eigen::Affine3d sensor_with_respect_to_robot = flange_with_respect_to_robot * sensor_with_respect_to_flange;
 	Eigen::Affine3d tool_with_respect_to_robot = sensor_with_respect_to_robot * tool_with_repsect_to_sensor;
+	task_frame_with_respect_to_robot_ = tool_with_respect_to_robot;
 	Eigen::VectorXd initial_end_effector_pose = Eigen::VectorXd::Zero(6); 
 	initial_end_effector_pose.head(3) = tool_with_respect_to_robot.translation();
 	initial_end_effector_pose.tail(3) = decompose_rot_mat(tool_with_respect_to_robot.linear());
@@ -318,6 +357,21 @@ int main(int argc, char **argv) {
 	z_vec_message.x = z_vec(0);
 	z_vec_message.y = z_vec(1);
 	z_vec_message.z = z_vec(2);
+
+	// Find the tool's x, y, and z vectors with respect to the robot; needed for certain skills
+	task_frame_rotation_matrix_ = task_frame_with_respect_to_robot_.linear();
+	x_vec_task_ = task_frame_rotation_matrix_.col(0);
+	y_vec_task_ = task_frame_rotation_matrix_.col(1);
+	z_vec_task_ = task_frame_rotation_matrix_.col(2);
+	x_vec_task_message_.x = x_vec_task_(0);
+	x_vec_task_message_.y = x_vec_task_(1);
+	x_vec_task_message_.z = x_vec_task_(2);
+	y_vec_task_message_.x = y_vec_task_(0);
+	y_vec_task_message_.y = y_vec_task_(1);
+	y_vec_task_message_.z = y_vec_task_(2);
+	z_vec_task_message_.x = z_vec_task_(0);
+	z_vec_task_message_.y = z_vec_task_(1);
+	z_vec_task_message_.z = z_vec_task_(2);
 
 	// Declare the bumpless virtual attractor's pose
 	Eigen::VectorXd bumpless_virtual_attractor_position(3);
@@ -352,7 +406,7 @@ int main(int argc, char **argv) {
 		current_end_effector_pose.tail(3) = decompose_rot_mat(tool_with_respect_to_robot.linear()); 
 		Eigen::Quaterniond flange_quat(tool_with_respect_to_robot.linear());
 
-		// Find tool's current x, y, and vector for use in skills 
+		// Find tool's current x, y, and z vector for use in skills 
 		tool_R = tool_with_respect_to_robot.linear();
 		Eigen::Vector3d x_vec = tool_R.col(0);
 		Eigen::Vector3d y_vec = tool_R.col(1);
@@ -508,6 +562,11 @@ int main(int argc, char **argv) {
 		x_vec_pub.publish(x_vec_message);
 		y_vec_pub.publish(y_vec_message);
 		z_vec_pub.publish(z_vec_message);
+
+		// Publish task frame vectors
+		x_vec_task_pub.publish(x_vec_task_message_);
+		y_vec_task_pub.publish(y_vec_task_message_);
+		z_vec_task_pub.publish(z_vec_task_message_);
 
 		// Pulish freeze mode status
 		freeze_mode_pub.publish(freeze_mode_status);

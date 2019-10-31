@@ -1,7 +1,6 @@
-// Move Until Touch with Position Targeting and Force Limiting (PTFL)
+// Move Until Touch with Position Targeting and Effort Limiting (PTEL)
 // Matthew Haberbusch, Surag Balajepalli, and Rahul Pokharna 
-// Last updated 10/15/19
-// 
+
 // All ROS-specific code labeled with "ROS:" comments
 
 // ROS: include libraries
@@ -55,7 +54,7 @@ int main(int argc, char** argv) {
     
     // ROS: Service status variable for use with buffer.cpp
     behavior_algorithms::status_service srv;
-    srv.request.name = "PTFL_z";
+    srv.request.name = "PTEL_z";
 
     /*
     How to tune params:
@@ -114,6 +113,13 @@ int main(int argc, char** argv) {
         FORCE_THRESHOLD = 15;
         ROS_INFO("Params set for BOTTLE_CAP");
     }
+    else if (!strcmp(param_set.c_str(), "Cutting")){
+        // set the other values here
+        PULL_DISTANCE = 0.010;
+        FORCE_THRESHOLD = 10;
+        ROS_INFO("Params set for CUTTING");
+    }
+
 
     ROS_INFO("Output from parameter for target_distance; %f", TARGET_DISTANCE); 
 
