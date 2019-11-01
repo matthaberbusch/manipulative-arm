@@ -39,10 +39,12 @@ class Application(tk.Frame):
         self.motion_control = ttk.Frame(self.tab_control)
         self.orientation_control = ttk.Frame(self.tab_control)
         self.wiggle_control = ttk.Frame(self.tab_control)
+        self.zeroing_control = ttk.Frame(self.tab_control)
 
         self.tab_control.add(self.motion_control, text='Motion Control')
         self.tab_control.add(self.orientation_control, text='Orientation Control')
         self.tab_control.add(self.wiggle_control, text='Wiggle Control')
+        self.tab_control.add(self.zeroing_control, text='Zeroing Control')
 
     # Pack and display the tabs
 
@@ -91,7 +93,7 @@ class Application(tk.Frame):
         # Force Moment Accomodation (Present in both motion and orientation control tabs)
         # MOTION CONTROL FMA
         self.force_moment_acc_label = tk.Label(self.motion_control,
-                text='Force Moment Accomodation:',
+                text='Limp Mode:',
                 font='Courier 20 bold')
         self.force_moment_acc_label.grid(row=1, column=0,
                 sticky=tk.NSEW, pady=5, padx=2)
@@ -122,7 +124,7 @@ class Application(tk.Frame):
 
         # ORIENTATION CONTROL FMA
         self.force_moment_acc_label_oc = tk.Label(self.orientation_control,
-                text='Force Moment Accomodation:',
+                text='Limp Mode:',
                 font='Courier 20 bold')
         self.force_moment_acc_label_oc.grid(row=1, column=0,
                 sticky=tk.NSEW, pady=5, padx=2)
@@ -483,6 +485,14 @@ class Application(tk.Frame):
         self.translational_wiggle_push_pre_2.grid(row=3, column=3,
                 sticky=tk.NSEW, pady=5, padx=2)
 
+
+        # Button for Zero Forces
+        self.zero_forces = tk.Button(self.zeroing_control,
+                text='Zero all Forces', fg='blue',
+                command=self.zero_forces, font='Courier 20 bold')
+        self.zero_forces.grid(row=0, column=0,
+                sticky=tk.NSEW, pady=5, padx=2)
+
         # Show all buttons
 
         self.pack()
@@ -645,13 +655,13 @@ class Application(tk.Frame):
     # rosrun behavior_algorithms orientation_targeting_with_torque_limiting _target_orientation:=2
     
     # PTEL in x
-    # sample command: rosrun behavior_algorithms position_targeting_with_force_limiting_x _target_distance:=-0.02
+    # sample command: rosrun behavior_algorithms position_targeting_effort_limiting_x _target_distance:=-0.02
     def position_targ_effort_limit_x(self):
 
         # print("Here, i run a command using os, skill 2")
 
         command = \
-            'rosrun behavior_algorithms position_targeting_with_force_limiting_x'
+            'rosrun behavior_algorithms position_targeting_effort_limiting_x'
         target_distance = self.parse_entry()
         if target_distance != 0:
             command = command + ' _target_distance:=%f' \
@@ -665,13 +675,13 @@ class Application(tk.Frame):
 
     def position_targ_effort_limit_pre_1_x(self):
         time.sleep(delay_len)
-        command = 'rosrun behavior_algorithms position_targeting_with_force_limiting_x _target_distance:=0.03 _param_set:=' + self.parameter_set.get()
+        command = 'rosrun behavior_algorithms position_targeting_effort_limiting_x _target_distance:=0.03 _param_set:=' + self.parameter_set.get()
         os.system(command)  # would be replaced by rosrun pkg node
         time.sleep(delay_len)
 
     def position_targ_effort_limit_pre_2_x(self):
         time.sleep(delay_len)
-        command = 'rosrun behavior_algorithms position_targeting_with_force_limiting_x _target_distance:=-0.03 _param_set:=' + self.parameter_set.get()
+        command = 'rosrun behavior_algorithms position_targeting_effort_limiting_x _target_distance:=-0.03 _param_set:=' + self.parameter_set.get()
         os.system(command)
         time.sleep(delay_len)
 
@@ -681,7 +691,7 @@ class Application(tk.Frame):
         # print("Here, i run a command using os, skill 2")
 
         command = \
-            'rosrun behavior_algorithms position_targeting_with_force_limiting_y'
+            'rosrun behavior_algorithms position_targeting_effort_limiting_y'
         target_distance = self.parse_entry()
         if target_distance != 0:
             command = command + ' _target_distance:=%f' \
@@ -695,13 +705,13 @@ class Application(tk.Frame):
 
     def position_targ_effort_limit_pre_1_y(self):
         time.sleep(delay_len)
-        command = 'rosrun behavior_algorithms position_targeting_with_force_limiting_y _target_distance:=0.03 _param_set:=' + self.parameter_set.get()
+        command = 'rosrun behavior_algorithms position_targeting_effort_limiting_y _target_distance:=0.03 _param_set:=' + self.parameter_set.get()
         os.system(command)  # would be replaced by rosrun pkg node
         time.sleep(delay_len)
 
     def position_targ_effort_limit_pre_2_y(self):
         time.sleep(delay_len)
-        command = 'rosrun behavior_algorithms position_targeting_with_force_limiting_y _target_distance:=-0.03 _param_set:=' + self.parameter_set.get()
+        command = 'rosrun behavior_algorithms position_targeting_effort_limiting_y _target_distance:=-0.03 _param_set:=' + self.parameter_set.get()
         os.system(command)
         time.sleep(delay_len)
 
@@ -711,7 +721,7 @@ class Application(tk.Frame):
         # print("Here, i run a command using os, skill 2")
 
         command = \
-            'rosrun behavior_algorithms position_targeting_with_force_limiting_z'
+            'rosrun behavior_algorithms position_targeting_effort_limiting_z'
         target_distance = self.parse_entry()
         if target_distance != 0:
             command = command + ' _target_distance:=%f' \
@@ -725,13 +735,13 @@ class Application(tk.Frame):
 
     def position_targ_effort_limit_pre_1_z(self):
         time.sleep(delay_len)
-        command = 'rosrun behavior_algorithms position_targeting_with_force_limiting_z _target_distance:=0.03 _param_set:=' + self.parameter_set.get()
+        command = 'rosrun behavior_algorithms position_targeting_effort_limiting_z _target_distance:=0.03 _param_set:=' + self.parameter_set.get()
         os.system(command)  # would be replaced by rosrun pkg node
         time.sleep(delay_len)
 
     def position_targ_effort_limit_pre_2_z(self):
         time.sleep(delay_len)
-        command = 'rosrun behavior_algorithms position_targeting_with_force_limiting_z _target_distance:=-0.03 _param_set:=' + self.parameter_set.get()
+        command = 'rosrun behavior_algorithms position_targeting_effort_limiting_z _target_distance:=-0.03 _param_set:=' + self.parameter_set.get()
         os.system(command)
         time.sleep(delay_len)
 
@@ -852,12 +862,16 @@ class Application(tk.Frame):
                   )  # would be replaced by rosrun pkg node
         time.sleep(delay_len)
 
-    def parse_entry(self):
+    def zero_forces(self):
+        time.sleep(delay_len)
+        os.system('rosservice call /robotiq_ft_sensor_acc "command_id: 8"')  # would be replaced by rosrun pkg node
+        time.sleep(delay_len)
 
+
+    def parse_entry(self):
         # print("output from text box")
         # print(self.entry.get())
         # Clear text in here potentially? kept for now to show what was the last input
-
         try:
             return float(self.entry.get())
         except:

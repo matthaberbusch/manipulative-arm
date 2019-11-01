@@ -275,7 +275,7 @@ int main(int argc, char **argv) {
 	double dt_ = 0.01;
 	double MAX_JOINT_VELOCITY_NORM = 10;
 	
-	// Define gains
+	// Define damping and gains
 	double B_virtual_translational = 4000; 
 	double B_virtual_rotational = 100; 
 	double K_virtual_translational = 1000; 
@@ -325,7 +325,7 @@ int main(int argc, char **argv) {
 	Eigen::Affine3d tool_with_repsect_to_sensor;
 	Eigen::Matrix3d tool_with_repsect_to_sensor_rotation = Eigen::Matrix3d::Identity();
 	Eigen::Vector3d tool_with_repsect_to_sensor_translation;
-	tool_with_repsect_to_sensor_translation<<0,0,0; // 0,0,0.1 is old one
+	tool_with_repsect_to_sensor_translation<<0,0,0.24; // 0,0,0.1 is old one
 	tool_with_repsect_to_sensor.linear() = tool_with_repsect_to_sensor_rotation;
 	tool_with_repsect_to_sensor.translation() = tool_with_repsect_to_sensor_translation;
 	

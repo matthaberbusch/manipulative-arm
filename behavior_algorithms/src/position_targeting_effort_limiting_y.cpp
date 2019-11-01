@@ -20,6 +20,7 @@ geometry_msgs::PoseStamped virtual_attractor;
 geometry_msgs::Wrench ft_in_robot_frame;
 
 geometry_msgs::Vector3 tool_vector_y;
+geometry_msgs::Vector3 tool_vector_z;
 
 // ROS: callback functions for how we receive data
 void cartesian_state_callback(const geometry_msgs::PoseStamped& cartesian_pose) {
@@ -34,7 +35,9 @@ void ft_callback(const geometry_msgs::Wrench& ft_values) {
 void tool_vector_callback(const geometry_msgs::Vector3& tool_vector_msg_y) {
     tool_vector_y = tool_vector_msg_y;
 }
-
+void tool_vector_z_callback(const geometry_msgs::Vector3& tool_vector_msg_z) {
+    tool_vector_z = tool_vector_msg_z;
+}
 
 // ROS: main program
 int main(int argc, char** argv) {
@@ -46,6 +49,7 @@ int main(int argc, char** argv) {
     ros::Subscriber cartesian_state_subscriber = nh.subscribe("cartesian_logger",1, cartesian_state_callback); // subscribe to the topic publishing the cartesian state of the end effector
     ros::Subscriber ft_subscriber = nh.subscribe("transformed_ft_wrench",1,ft_callback);                       // subscribe to the force/torque sensor data
     ros::Subscriber tool_vector_sub_y = nh.subscribe("tool_vector_y",1,tool_vector_callback);                  // subscribe to the value of the tool vector in the z, published from the accomodation controller
+    ros::Subscriber tool_vector_sub_z = nh.subscribe("tool_vector_z",1,tool_vector_z_callback);                  // subscribe to the value of the tool vector in the z, published from the accomodation controller
     ros::Publisher virtual_attractor_publisher = nh.advertise<geometry_msgs::PoseStamped>("Virt_attr_pose",1); // publish the pose of the virtual attractor for the accomodation controller 
 
     // ROS: Services used in conjunction with buffer.cpp to have delayed program status sent to operator
@@ -72,7 +76,7 @@ int main(int argc, char** argv) {
     PULL_DISTANCE and FORCE_THRESHOLD: Default values defined here, but are modified below depending on GUI setting (Line 98)
     */
     double PULL_DISTANCE = 0.012, KEEP_CONTACT_DISTANCE = 0.0075, DT = 0.01, FORCE_THRESHOLD = 12, TARGET_DISTANCE = 0.05; 
-    double NONDIRECTIONAL_FORCE_THRESHOLD = 20;
+    double NONDIRECTIONAL_FORCE_THRESHOLD = 20, KEEP_CUTTING_DISTANCE = 0;
     double TORQUE_THRESHOLD = 2;
     double RUN_TIME = 15;
 
@@ -105,18 +109,22 @@ int main(int argc, char** argv) {
         // set the new values here
         PULL_DISTANCE = 0.012;
         FORCE_THRESHOLD = 12;
+        KEEP_CUTTING_DISTANCE = 0;
         ROS_INFO("Params set for PEG");
     }
     else if (!strcmp(param_set.c_str(), "Bottle_Cap")){
         // set the other values here
         PULL_DISTANCE = 0.015;
         FORCE_THRESHOLD = 15;
+        KEEP_CUTTING_DISTANCE = 0;
         ROS_INFO("Params set for BOTTLE_CAP");
     }
     else if (!strcmp(param_set.c_str(), "Cutting")){
         // set the other values here
-        PULL_DISTANCE = 0.010;
-        FORCE_THRESHOLD = 10;
+        PULL_DISTANCE = 0.005;
+        KEEP_CONTACT_DISTANCE = 0;
+        KEEP_CUTTING_DISTANCE = 0.0025;
+        FORCE_THRESHOLD = 2.5;
         ROS_INFO("Params set for CUTTING");
     }
 
@@ -143,15 +151,49 @@ int main(int argc, char** argv) {
 
 
     // ROS: Wait until we have position data. Our default position is 0.
-    while(current_pose.position.x == 0) ros::spinOnce();
+    while(current_pose.position.x == 0 || tool_vector_y.x == 0) ros::spinOnce();
 
     // Get starting position
-    double start_position = abs(current_pose.position.z);
+    double start_position = abs(current_pose.position.x);
     double target_position = start_position + TARGET_DISTANCE;
 
-    // Print starting and target positions
-    cout<<"Starting position: "<<endl<<start_position<<endl;
-    cout<<"Target position: "<<endl<<target_position<<endl;
+    geometry_msgs::Vector3 beginning_position;
+    beginning_position.x = current_pose.position.x;
+    beginning_position.y = current_pose.position.y;
+    beginning_position.z = current_pose.position.z;
+
+    geometry_msgs::Vector3 ending_position;
+    ending_position.x = beginning_position.x + tool_vector_y.x * TARGET_DISTANCE;
+    ending_position.y = beginning_position.y + tool_vector_y.y * TARGET_DISTANCE;
+    ending_position.z = beginning_position.z + tool_vector_y.z * TARGET_DISTANCE;
+
+    geometry_msgs::Vector3 original_tool_vector_y = tool_vector_y;
+    
+    // Vector of the difference between the end pose and current pose, used to calculate if we reached target
+    geometry_msgs::Vector3 vector_to_goal;
+    vector_to_goal.x = ending_position.x - current_pose.position.x;
+    vector_to_goal.y = ending_position.y - current_pose.position.y;
+    vector_to_goal.z = ending_position.z - current_pose.position.z;
+
+    // Dot product, uf the value is above 0, we hit the target movement
+    double dot_product = vector_to_goal.x * original_tool_vector_y.x + vector_to_goal.y * original_tool_vector_y.y + vector_to_goal.z * original_tool_vector_y.z;
+    
+    // If it is past the plane perpendicular to the direction of movement at the goal position, then we have reached the target 
+    bool target_reached;
+
+    if(TARGET_DISTANCE < 0){
+        target_reached = dot_product > 0;
+    }
+    else {
+        target_reached = dot_product < 0;
+    }
+
+    // Debug output
+    cout<<"Tool Vector Z"<<endl<<tool_vector_y<<endl;
+    cout<<"Difference Vector"<<endl<<vector_to_goal<<endl;
+    cout<<"Dot Product"<<endl<<dot_product<<endl<<endl;
+
+
 
     // Loop variable to check effort limit condition
     bool effort_limit_crossed = false;
@@ -166,7 +208,7 @@ int main(int argc, char** argv) {
     2. One of the effort thresholds has been crossed
     3. The target orientation has been reached
     */
-    while( (loops_so_far <= total_number_of_loops) && !effort_limit_crossed && (((abs(current_pose.position.z) < target_position) && (TARGET_DISTANCE >= 0)) || ((abs(current_pose.position.z) >= target_position) && (TARGET_DISTANCE < 0))) ) {
+    while( (loops_so_far <= total_number_of_loops) && !effort_limit_crossed && !target_reached) {
         // ROS: for communication between programs
         ros::spinOnce();
 
@@ -175,26 +217,45 @@ int main(int argc, char** argv) {
  
         // Pull down in the direction of the tool
         if(TARGET_DISTANCE > 0){
-            virtual_attractor.pose.position.x = current_pose.position.x + tool_vector_y.x * PULL_DISTANCE; 
-            virtual_attractor.pose.position.y = current_pose.position.y + tool_vector_y.y * PULL_DISTANCE;
-            virtual_attractor.pose.position.z = current_pose.position.z + tool_vector_y.z * PULL_DISTANCE;
+            virtual_attractor.pose.position.x = current_pose.position.x + tool_vector_y.x * PULL_DISTANCE + tool_vector_z.x * KEEP_CUTTING_DISTANCE; 
+            virtual_attractor.pose.position.y = current_pose.position.y + tool_vector_y.y * PULL_DISTANCE + tool_vector_z.y * KEEP_CUTTING_DISTANCE; 
+            virtual_attractor.pose.position.z = current_pose.position.z + tool_vector_y.z * PULL_DISTANCE + tool_vector_z.z * KEEP_CUTTING_DISTANCE; 
         }
         // Pull up in the direction of the tool
         else {
-            virtual_attractor.pose.position.x = current_pose.position.x - tool_vector_y.x * PULL_DISTANCE;
-            virtual_attractor.pose.position.y = current_pose.position.y - tool_vector_y.y * PULL_DISTANCE;
-            virtual_attractor.pose.position.z = current_pose.position.z - tool_vector_y.z * PULL_DISTANCE;
+            virtual_attractor.pose.position.x = current_pose.position.x - tool_vector_y.x * PULL_DISTANCE + tool_vector_z.x * KEEP_CUTTING_DISTANCE;
+            virtual_attractor.pose.position.y = current_pose.position.y - tool_vector_y.y * PULL_DISTANCE + tool_vector_z.x * KEEP_CUTTING_DISTANCE;
+            virtual_attractor.pose.position.z = current_pose.position.z - tool_vector_y.z * PULL_DISTANCE + tool_vector_z.x * KEEP_CUTTING_DISTANCE;
         }
+        
+        vector_to_goal.x = ending_position.x - current_pose.position.x;
+        vector_to_goal.y = ending_position.y - current_pose.position.y;
+        vector_to_goal.z = ending_position.z - current_pose.position.z;
+
+        // Dot product, uf the value is above 0, we hit the target movement
+        double dot_product = vector_to_goal.x * original_tool_vector_y.x + vector_to_goal.y * original_tool_vector_y.y + vector_to_goal.z * original_tool_vector_y.z;
+        
+        // If it is past the plane perpendicular to the direction of movement at the goal position, then we have reached the target 
+        if(TARGET_DISTANCE < 0){
+            target_reached = dot_product > 0;
+        }
+        else {
+            target_reached = dot_product < 0;
+        }
+
+        // Update the values for the loop condition
+        effort_limit_crossed = ((abs(ft_in_robot_frame.torque.x) > TORQUE_THRESHOLD) || (abs(ft_in_robot_frame.torque.y) > TORQUE_THRESHOLD) || (abs(ft_in_robot_frame.torque.z) > TORQUE_THRESHOLD) ||
+                                 (abs(ft_in_robot_frame.force.x) > FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.y) > NONDIRECTIONAL_FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.z) > NONDIRECTIONAL_FORCE_THRESHOLD));
+
+        loops_so_far = loops_so_far + 1;
+
+        // Debug output
+        cout<<"Difference Vector"<<endl<<vector_to_goal<<endl;
+        cout<<"Dot Product"<<endl<<dot_product<<endl<<endl;
 
         // ROS: for communication between programs
         virtual_attractor_publisher.publish(virtual_attractor);
         naptime.sleep();
-
-        // Update the values for the loop condition
-        effort_limit_crossed = ((abs(ft_in_robot_frame.torque.x) > TORQUE_THRESHOLD) || (abs(ft_in_robot_frame.torque.y) > TORQUE_THRESHOLD) || (abs(ft_in_robot_frame.torque.z) > TORQUE_THRESHOLD) ||
-                                 (abs(ft_in_robot_frame.force.x) > NONDIRECTIONAL_FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.y) > NONDIRECTIONAL_FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.z) > FORCE_THRESHOLD));
-
-        loops_so_far = loops_so_far + 1;
 
         // Print current position
         // cout<<"Current position: "<<endl<<abs(current_pose.position.x)<<endl;
@@ -238,16 +299,21 @@ int main(int argc, char** argv) {
 
         // Keep the virtual attractor slightly below the surface, or above if pulling back
         virtual_attractor.pose = current_pose;
-        if (abs(current_pose.position.z) < target_position){
-            virtual_attractor.pose.position.z = current_pose.position.z + KEEP_CONTACT_DISTANCE;
+        if(TARGET_DISTANCE > 0){
+            virtual_attractor.pose.position.x = current_pose.position.x + tool_vector_y.x * KEEP_CONTACT_DISTANCE;
+            virtual_attractor.pose.position.y = current_pose.position.y + tool_vector_y.y * KEEP_CONTACT_DISTANCE;
+            virtual_attractor.pose.position.z = current_pose.position.z + tool_vector_y.z * KEEP_CONTACT_DISTANCE;
         }
+        // Pull up in the direction of the tool
         else {
-            virtual_attractor.pose.position.z = current_pose.position.z - KEEP_CONTACT_DISTANCE;
+            virtual_attractor.pose.position.x = current_pose.position.x - tool_vector_y.x * KEEP_CONTACT_DISTANCE;
+            virtual_attractor.pose.position.y = current_pose.position.y - tool_vector_y.y * KEEP_CONTACT_DISTANCE;
+            virtual_attractor.pose.position.z = current_pose.position.z - tool_vector_y.z * KEEP_CONTACT_DISTANCE;
         }
     }
 
     // If we've reached target position
-    if((abs(current_pose.position.z) >= target_position && (TARGET_DISTANCE > 0) ) || (abs(current_pose.position.z) < target_position && (TARGET_DISTANCE <= 0) ) ) {
+    if(target_reached) {
         // Print message
         cout<<"Target position reached"<<endl;
         srv.request.status = "target position reached";

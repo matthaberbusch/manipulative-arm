@@ -115,8 +115,9 @@ int main(int argc, char** argv) {
     }
     else if (!strcmp(param_set.c_str(), "Cutting")){
         // set the other values here
-        PULL_DISTANCE = 0.010;
-        FORCE_THRESHOLD = 10;
+        PULL_DISTANCE = 0.005;
+        KEEP_CONTACT_DISTANCE = 0.0025;
+        FORCE_THRESHOLD = 2.5;
         ROS_INFO("Params set for CUTTING");
     }
 
@@ -144,11 +145,47 @@ int main(int argc, char** argv) {
 
 
     // ROS: Wait until we have position data. Our default position is 0.
-    while(current_pose.position.x == 0) ros::spinOnce();
+    while(current_pose.position.x == 0 || tool_vector_z.x == 0) ros::spinOnce();
 
     // Get starting position
     double start_position = abs(current_pose.position.x);
     double target_position = start_position + TARGET_DISTANCE;
+
+    geometry_msgs::Vector3 beginning_position;
+    beginning_position.x = current_pose.position.x;
+    beginning_position.y = current_pose.position.y;
+    beginning_position.z = current_pose.position.z;
+
+    geometry_msgs::Vector3 ending_position;
+    ending_position.x = beginning_position.x + tool_vector_z.x * TARGET_DISTANCE;
+    ending_position.y = beginning_position.y + tool_vector_z.y * TARGET_DISTANCE;
+    ending_position.z = beginning_position.z + tool_vector_z.z * TARGET_DISTANCE;
+
+    geometry_msgs::Vector3 original_tool_vector_z = tool_vector_z;
+    
+    // Vector of the difference between the end pose and current pose, used to calculate if we reached target
+    geometry_msgs::Vector3 vector_to_goal;
+    vector_to_goal.x = ending_position.x - current_pose.position.x;
+    vector_to_goal.y = ending_position.y - current_pose.position.y;
+    vector_to_goal.z = ending_position.z - current_pose.position.z;
+
+    // Dot product, uf the value is above 0, we hit the target movement
+    double dot_product = vector_to_goal.x * original_tool_vector_z.x + vector_to_goal.y * original_tool_vector_z.y + vector_to_goal.z * original_tool_vector_z.z;
+    
+    // If it is past the plane perpendicular to the direction of movement at the goal position, then we have reached the target 
+    bool target_reached;
+
+    if(TARGET_DISTANCE < 0){
+        target_reached = dot_product > 0;
+    }
+    else {
+        target_reached = dot_product < 0;
+    }
+
+    // Debug output
+    cout<<"Tool Vector Z"<<endl<<tool_vector_z<<endl;
+    cout<<"Difference Vector"<<endl<<vector_to_goal<<endl;
+    cout<<"Dot Product"<<endl<<dot_product<<endl<<endl;
 
     // Print starting and target positions
     cout<<"Starting position: "<<endl<<start_position<<endl;
@@ -159,6 +196,7 @@ int main(int argc, char** argv) {
     effort_limit_crossed = ((abs(ft_in_robot_frame.torque.x) > TORQUE_THRESHOLD) || (abs(ft_in_robot_frame.torque.y) > TORQUE_THRESHOLD) || (abs(ft_in_robot_frame.torque.z) > TORQUE_THRESHOLD) ||
                                  (abs(ft_in_robot_frame.force.x) > FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.y) > NONDIRECTIONAL_FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.z) > NONDIRECTIONAL_FORCE_THRESHOLD));
 
+
     // Begin loop
     // Assuming we're always going in the x direction.
     /*
@@ -167,7 +205,7 @@ int main(int argc, char** argv) {
     2. One of the effort thresholds has been crossed
     3. The target orientation has been reached
     */
-    while( (loops_so_far <= total_number_of_loops) && !effort_limit_crossed && (((abs(current_pose.position.x) < target_position) && (TARGET_DISTANCE >= 0)) || ((abs(current_pose.position.x) >= target_position) && (TARGET_DISTANCE < 0))) ) {
+    while( (loops_so_far <= total_number_of_loops) && !effort_limit_crossed && !target_reached ) {
         // ROS: for communication between programs
         ros::spinOnce();
 
@@ -187,15 +225,34 @@ int main(int argc, char** argv) {
             virtual_attractor.pose.position.z = current_pose.position.z - tool_vector_z.z * PULL_DISTANCE;
         }
 
-        // ROS: for communication between programs
-        virtual_attractor_publisher.publish(virtual_attractor);
-        naptime.sleep();
+        vector_to_goal.x = ending_position.x - current_pose.position.x;
+        vector_to_goal.y = ending_position.y - current_pose.position.y;
+        vector_to_goal.z = ending_position.z - current_pose.position.z;
+
+        // Dot product, uf the value is above 0, we hit the target movement
+        double dot_product = vector_to_goal.x * original_tool_vector_z.x + vector_to_goal.y * original_tool_vector_z.y + vector_to_goal.z * original_tool_vector_z.z;
+        
+        // If it is past the plane perpendicular to the direction of movement at the goal position, then we have reached the target 
+        if(TARGET_DISTANCE < 0){
+            target_reached = dot_product > 0;
+        }
+        else {
+            target_reached = dot_product < 0;
+        }
 
         // Update the values for the loop condition
         effort_limit_crossed = ((abs(ft_in_robot_frame.torque.x) > TORQUE_THRESHOLD) || (abs(ft_in_robot_frame.torque.y) > TORQUE_THRESHOLD) || (abs(ft_in_robot_frame.torque.z) > TORQUE_THRESHOLD) ||
                                  (abs(ft_in_robot_frame.force.x) > FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.y) > NONDIRECTIONAL_FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.z) > NONDIRECTIONAL_FORCE_THRESHOLD));
 
         loops_so_far = loops_so_far + 1;
+
+        // Debug output
+        cout<<"Difference Vector"<<endl<<vector_to_goal<<endl;
+        cout<<"Dot Product"<<endl<<dot_product<<endl<<endl;
+
+        // ROS: for communication between programs
+        virtual_attractor_publisher.publish(virtual_attractor);
+        naptime.sleep();
 
         // Print current position
         // cout<<"Current position: "<<endl<<abs(current_pose.position.x)<<endl;
@@ -239,16 +296,22 @@ int main(int argc, char** argv) {
 
         // Keep the virtual attractor slightly below the surface, or above if pulling back
         virtual_attractor.pose = current_pose;
-        if (abs(current_pose.position.x) < target_position){
-            virtual_attractor.pose.position.x = current_pose.position.x + KEEP_CONTACT_DISTANCE;
+        if(TARGET_DISTANCE > 0){
+            virtual_attractor.pose.position.x = current_pose.position.x + tool_vector_z.x * KEEP_CONTACT_DISTANCE;
+            virtual_attractor.pose.position.y = current_pose.position.y + tool_vector_z.y * KEEP_CONTACT_DISTANCE;
+            virtual_attractor.pose.position.z = current_pose.position.z + tool_vector_z.z * KEEP_CONTACT_DISTANCE;
         }
+        // Pull up in the direction of the tool
         else {
-            virtual_attractor.pose.position.x = current_pose.position.x - KEEP_CONTACT_DISTANCE;
+            virtual_attractor.pose.position.x = current_pose.position.x - tool_vector_z.x * KEEP_CONTACT_DISTANCE;
+            virtual_attractor.pose.position.y = current_pose.position.y - tool_vector_z.y * KEEP_CONTACT_DISTANCE;
+            virtual_attractor.pose.position.z = current_pose.position.z - tool_vector_z.z * KEEP_CONTACT_DISTANCE;
         }
+
     }
 
     // If we've reached target position
-    if((abs(current_pose.position.x) >= target_position && (TARGET_DISTANCE > 0) ) || (abs(current_pose.position.x) < target_position && (TARGET_DISTANCE <= 0) ) ) {
+    if(target_reached) { // (abs(current_pose.position.x) >= target_position && (TARGET_DISTANCE > 0) ) || (abs(current_pose.position.x) < target_position && (TARGET_DISTANCE <= 0) ) 
         // Print message
         cout<<"Target position reached"<<endl;
         srv.request.status = "target position reached";
