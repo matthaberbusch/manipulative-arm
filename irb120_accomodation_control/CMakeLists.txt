@@ -68,6 +68,7 @@ add_definitions(${EIGEN_DEFINITIONS})
 add_service_files(
   FILES
    freeze_service.srv
+   set_task_frame.srv
 #   Service2.srv
  )
 

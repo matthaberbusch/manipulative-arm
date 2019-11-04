@@ -493,6 +493,14 @@ class Application(tk.Frame):
         self.zero_forces.grid(row=0, column=0,
                 sticky=tk.NSEW, pady=5, padx=2)
 
+        # Button for Setting Task Frame
+        self.set_task_frame = tk.Button(self.zeroing_control,
+                text='Set Task Frame', fg='blue',
+                command=self.zero_forces, font='Courier 20 bold')
+        self.set_task_frame.grid(row=1, column=0,
+                sticky=tk.NSEW, pady=5, padx=2)
+
+
         # Show all buttons
 
         self.pack()
@@ -506,7 +514,7 @@ class Application(tk.Frame):
 
         self.entry.delete(0, 'end')
 
-        # os.system("rosrun irb120_accomodation_control accommodation_controller") # would be replaced by rosrun pkg node
+        # os.system("rosrun irb120_accomodation_control accommodation_controller") 
 
     def force_moment_acc(self):
 
@@ -521,7 +529,7 @@ class Application(tk.Frame):
         # print(command)
 
         time.sleep(delay_len)
-        os.system(command)  # would be replaced by rosrun pkg node
+        os.system(command)  
         time.sleep(delay_len)
 
     def force_moment_acc_preset_1(self):
@@ -530,7 +538,7 @@ class Application(tk.Frame):
 
         time.sleep(delay_len)
         os.system('rosrun behavior_algorithms force_moment_accommodation _run_time:=10'
-                  )  # would be replaced by rosrun pkg node
+                  )  
         time.sleep(delay_len)
 
     def force_moment_acc_preset_2(self):
@@ -539,7 +547,7 @@ class Application(tk.Frame):
 
         time.sleep(delay_len)
         os.system('rosrun behavior_algorithms force_moment_accommodation _run_time:=5'
-                  )  # would be replaced by rosrun pkg node
+                  )  
         time.sleep(delay_len)
 
     
@@ -560,7 +568,7 @@ class Application(tk.Frame):
         # print(command)
 
         time.sleep(delay_len)
-        os.system(command)  # would be replaced by rosrun pkg node
+        os.system(command)  
         time.sleep(delay_len)
 
     def orientation_targ_effort_limit_pre_1_x(self):
@@ -569,7 +577,7 @@ class Application(tk.Frame):
 
         time.sleep(delay_len)
         os.system('rosrun behavior_algorithms orientation_targeting_effort_limiting_x _target_orientation:=0.2 _param_set:=' + self.parameter_set.get()
-                  )  # would be replaced by rosrun pkg node
+                  )  
         time.sleep(delay_len)
 
     def orientation_targ_effort_limit_pre_2_x(self):
@@ -578,7 +586,7 @@ class Application(tk.Frame):
 
         time.sleep(delay_len)
         os.system('rosrun behavior_algorithms orientation_targeting_effort_limiting_x _target_orientation:=-0.2 _param_set:=' + self.parameter_set.get()
-                  )  # would be replaced by rosrun pkg node
+                  )  
         time.sleep(delay_len)
 
 
@@ -595,7 +603,7 @@ class Application(tk.Frame):
         # print(command)
 
         time.sleep(delay_len)
-        os.system(command)  # would be replaced by rosrun pkg node
+        os.system(command)  
         time.sleep(delay_len)
 
     def orientation_targ_effort_limit_pre_1_y(self):
@@ -604,7 +612,7 @@ class Application(tk.Frame):
 
         time.sleep(delay_len)
         os.system('rosrun behavior_algorithms orientation_targeting_effort_limiting_y _target_orientation:=0.2 _param_set:=' + self.parameter_set.get()
-                  )  # would be replaced by rosrun pkg node
+                  )  
         time.sleep(delay_len)
 
     def orientation_targ_effort_limit_pre_2_y(self):
@@ -613,7 +621,7 @@ class Application(tk.Frame):
 
         time.sleep(delay_len)
         os.system('rosrun behavior_algorithms orientation_targeting_effort_limiting_y _target_orientation:=-0.2 _param_set:=' + self.parameter_set.get()
-                  )  # would be replaced by rosrun pkg node
+                  )  
         time.sleep(delay_len)
 
 
@@ -630,7 +638,7 @@ class Application(tk.Frame):
         # print(command)
 
         time.sleep(delay_len)
-        os.system(command)  # would be replaced by rosrun pkg node
+        os.system(command)  
         time.sleep(delay_len)
 
     def orientation_targ_effort_limit_pre_1_z(self):
@@ -639,7 +647,7 @@ class Application(tk.Frame):
 
         time.sleep(delay_len)
         os.system('rosrun behavior_algorithms orientation_targeting_effort_limiting_z _target_orientation:=1.57 _param_set:=' + self.parameter_set.get()
-                  )  # would be replaced by rosrun pkg node
+                  )  
         time.sleep(delay_len)
 
     def orientation_targ_effort_limit_pre_2_z(self):
@@ -648,7 +656,7 @@ class Application(tk.Frame):
 
         time.sleep(delay_len)
         os.system('rosrun behavior_algorithms orientation_targeting_effort_limiting_z _target_orientation:=-1.57 _param_set:=' + self.parameter_set.get()
-                  )  # would be replaced by rosrun pkg node
+                  )  
         time.sleep(delay_len)
 
 
@@ -670,13 +678,13 @@ class Application(tk.Frame):
         print(command)
         command = command + ' _param_set:=' + self.parameter_set.get()
         time.sleep(delay_len)
-        os.system(command)  # would be replaced by rosrun pkg node
+        os.system(command)  
         time.sleep(delay_len)
 
     def position_targ_effort_limit_pre_1_x(self):
         time.sleep(delay_len)
         command = 'rosrun behavior_algorithms position_targeting_effort_limiting_x _target_distance:=0.03 _param_set:=' + self.parameter_set.get()
-        os.system(command)  # would be replaced by rosrun pkg node
+        os.system(command)  
         time.sleep(delay_len)
 
     def position_targ_effort_limit_pre_2_x(self):
@@ -700,13 +708,13 @@ class Application(tk.Frame):
         print(command)
         command = command + ' _param_set:=' + self.parameter_set.get()
         time.sleep(delay_len)
-        os.system(command)  # would be replaced by rosrun pkg node
+        os.system(command)  
         time.sleep(delay_len)
 
     def position_targ_effort_limit_pre_1_y(self):
         time.sleep(delay_len)
         command = 'rosrun behavior_algorithms position_targeting_effort_limiting_y _target_distance:=0.03 _param_set:=' + self.parameter_set.get()
-        os.system(command)  # would be replaced by rosrun pkg node
+        os.system(command)  
         time.sleep(delay_len)
 
     def position_targ_effort_limit_pre_2_y(self):
@@ -730,13 +738,13 @@ class Application(tk.Frame):
         print(command)
         command = command + ' _param_set:=' + self.parameter_set.get()
         time.sleep(delay_len)
-        os.system(command)  # would be replaced by rosrun pkg node
+        os.system(command)  
         time.sleep(delay_len)
 
     def position_targ_effort_limit_pre_1_z(self):
         time.sleep(delay_len)
         command = 'rosrun behavior_algorithms position_targeting_effort_limiting_z _target_distance:=0.03 _param_set:=' + self.parameter_set.get()
-        os.system(command)  # would be replaced by rosrun pkg node
+        os.system(command)  
         time.sleep(delay_len)
 
     def position_targ_effort_limit_pre_2_z(self):
@@ -760,19 +768,19 @@ class Application(tk.Frame):
         # print(command)
 
         time.sleep(delay_len)
-        os.system(command)  # would be replaced by rosrun pkg node
+        os.system(command)  
         time.sleep(delay_len)
 
     def torsional_wiggle_pull_pre_1(self):
         time.sleep(delay_len)
         os.system('rosrun behavior_algorithms torsional_wiggle_pull _wiggle_time:=3'
-                  )  # would be replaced by rosrun pkg node
+                  )  
         time.sleep(delay_len)
 
     def torsional_wiggle_pull_pre_2(self):
         time.sleep(delay_len)
         os.system('rosrun behavior_algorithms torsional_wiggle_pull _wiggle_time:=5'
-                  )  # would be replaced by rosrun pkg node
+                  )  
         time.sleep(delay_len)
 
     # rosrun behavior_algorithms torsional_wiggle_push _wiggle_time:=6
@@ -789,19 +797,19 @@ class Application(tk.Frame):
         # print(command)
 
         time.sleep(delay_len)
-        os.system(command)  # would be replaced by rosrun pkg node
+        os.system(command)  
         time.sleep(delay_len)
 
     def torsional_wiggle_push_pre_1(self):
         time.sleep(delay_len)
         os.system('rosrun behavior_algorithms torsional_wiggle_push _wiggle_time:=3'
-                  )  # would be replaced by rosrun pkg node
+                  )  
         time.sleep(delay_len)
 
     def torsional_wiggle_push_pre_2(self):
         time.sleep(delay_len)
         os.system('rosrun behavior_algorithms torsional_wiggle_push _wiggle_time:=5'
-                  )  # would be replaced by rosrun pkg node
+                  )  
         time.sleep(delay_len)
 
     # rosrun behavior_algorithms translational_wiggle_pull _wiggle_time:=6
@@ -818,19 +826,19 @@ class Application(tk.Frame):
         # print(command)
 
         time.sleep(delay_len)
-        os.system(command)  # would be replaced by rosrun pkg node
+        os.system(command)  
         time.sleep(delay_len)
 
     def translational_wiggle_pull_pre_1(self):
         time.sleep(delay_len)
         os.system('rosrun behavior_algorithms translational_wiggle_pull _wiggle_time:=3'
-                  )  # would be replaced by rosrun pkg node
+                  )  
         time.sleep(delay_len)
 
     def translational_wiggle_pull_pre_2(self):
         time.sleep(delay_len)
         os.system('rosrun behavior_algorithms translational_wiggle_pull _wiggle_time:=5'
-                  )  # would be replaced by rosrun pkg node
+                  )  
         time.sleep(delay_len)
 
     # rosrun behavior_algorithms translational_wiggle_push _wiggle_time:=6
@@ -847,26 +855,30 @@ class Application(tk.Frame):
         # print(command)
 
         time.sleep(delay_len)
-        os.system(command)  # would be replaced by rosrun pkg node
+        os.system(command)  
         time.sleep(delay_len)
 
     def translational_wiggle_push_pre_1(self):
         time.sleep(delay_len)
         os.system('rosrun behavior_algorithms translational_wiggle_push _wiggle_time:=3'
-                  )  # would be replaced by rosrun pkg node
+                  )  
         time.sleep(delay_len)
 
     def translational_wiggle_push_pre_2(self):
         time.sleep(delay_len)
         os.system('rosrun behavior_algorithms translational_wiggle_push _wiggle_time:=5'
-                  )  # would be replaced by rosrun pkg node
+                  )  
         time.sleep(delay_len)
 
     def zero_forces(self):
         time.sleep(delay_len)
-        os.system('rosservice call /robotiq_ft_sensor_acc "command_id: 8"')  # would be replaced by rosrun pkg node
+        os.system('rosservice call /robotiq_ft_sensor_acc "command_id: 8"')  
         time.sleep(delay_len)
 
+    def set_task_frame(self):
+        time.sleep(delay_len)
+        os.system('rosservice call /task_frame_service')  
+        time.sleep(delay_len)
 
     def parse_entry(self):
         # print("output from text box")

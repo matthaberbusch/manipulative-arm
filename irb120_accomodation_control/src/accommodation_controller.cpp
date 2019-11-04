@@ -6,6 +6,7 @@
 // ROS: include libraries
 #include <irb120_accomodation_control/irb120_accomodation_control.h>
 #include <irb120_accomodation_control/freeze_service.h>
+#include <irb120_accomodation_control/set_task_frame.h>
 #include <cmath>
 #include <Eigen/QR>
 #include <Eigen/Dense>
@@ -42,6 +43,7 @@ bool virtual_attractor_established = false;
 bool jnt_state_update = false;
 
 // Declare variables of tool frame vectors for skills to use. 
+Eigen::Affine3d tool_with_respect_to_robot_;
 geometry_msgs::Vector3 x_vec_message;
 geometry_msgs::Vector3 y_vec_message;
 geometry_msgs::Vector3 z_vec_message;
@@ -205,10 +207,12 @@ bool freezeServiceCallback(irb120_accomodation_control::freeze_serviceRequest &r
 }
 
 // in progress 10/29/19
-/*
 bool setTaskFrameCallback(irb120_accomodation_control::set_task_frameRequest &request, irb120_accomodation_control::set_task_frameResponse &response) {
 	// Find tool's current x, y, and vector for use in skills 
-	task_frame_rotation_matrix_ = task_frame_with_respect_to_robot.linear();
+	task_frame_with_respect_to_robot_ = tool_with_respect_to_robot_;
+
+	// Just get the data directly from the tool frame, the service does not send or receive data, just used as a trigger mechanism
+	task_frame_rotation_matrix_ = task_frame_with_respect_to_robot_.linear();
 	x_vec_task_ = task_frame_rotation_matrix_.col(0);
 	y_vec_task_ = task_frame_rotation_matrix_.col(1);
 	z_vec_task_ = task_frame_rotation_matrix_.col(2);
@@ -222,9 +226,10 @@ bool setTaskFrameCallback(irb120_accomodation_control::set_task_frameRequest &re
 	z_vec_task_message_.y = z_vec_task_(1);
 	z_vec_task_message_.z = z_vec_task_(2);
 
-	response.status = "task frame set"
+	response.status = "task frame set"; 
+	return true; 
 }
-*/
+
 
 
 // Main rogram
@@ -251,6 +256,8 @@ int main(int argc, char **argv) {
 	ros::Publisher x_vec_task_pub = nh.advertise<geometry_msgs::Vector3>("task_vector_x",1); // ROS: Publish the task coordinate frame's x vector in the robot coordinate frame
 	ros::Publisher y_vec_task_pub = nh.advertise<geometry_msgs::Vector3>("task_vector_y",1); // ROS: Publish the task coordinate frame's y vector in the robot coordinate frame
 	ros::Publisher z_vec_task_pub = nh.advertise<geometry_msgs::Vector3>("task_vector_z",1); // ROS: Publish the task coordinate frame's z vector in the robot coordinate frame
+
+	ros::ServiceServer task_frame_service = nh.advertiseService("task_frame_service",setTaskFrameCallback);
 
 	// ROS: Service to toggle freeze mode
 	ros::ServiceServer freeze_service = nh.advertiseService("freeze_service",freezeServiceCallback);
@@ -337,14 +344,14 @@ int main(int argc, char **argv) {
 
 	Eigen::Affine3d flange_with_respect_to_robot = irb120_fwd_solver.fwd_kin_solve(joint_states_);
 	Eigen::Affine3d sensor_with_respect_to_robot = flange_with_respect_to_robot * sensor_with_respect_to_flange;
-	Eigen::Affine3d tool_with_respect_to_robot = sensor_with_respect_to_robot * tool_with_repsect_to_sensor;
-	task_frame_with_respect_to_robot_ = tool_with_respect_to_robot;
+	tool_with_respect_to_robot_ = sensor_with_respect_to_robot * tool_with_repsect_to_sensor;
+	task_frame_with_respect_to_robot_ = tool_with_respect_to_robot_;
 	Eigen::VectorXd initial_end_effector_pose = Eigen::VectorXd::Zero(6); 
-	initial_end_effector_pose.head(3) = tool_with_respect_to_robot.translation();
-	initial_end_effector_pose.tail(3) = decompose_rot_mat(tool_with_respect_to_robot.linear());
+	initial_end_effector_pose.head(3) = tool_with_respect_to_robot_.translation();
+	initial_end_effector_pose.tail(3) = decompose_rot_mat(tool_with_respect_to_robot_.linear());
 
 	// Find the tool's x, y, and z vectors with respect to the robot; needed for certain skills
-	Eigen::MatrixXd tool_R = tool_with_respect_to_robot.linear();
+	Eigen::MatrixXd tool_R = tool_with_respect_to_robot_.linear();
 	Eigen::Vector3d x_vec = tool_R.col(0);
 	Eigen::Vector3d y_vec = tool_R.col(1);
 	Eigen::Vector3d z_vec = tool_R.col(2);
@@ -395,19 +402,19 @@ int main(int argc, char **argv) {
 		Eigen::MatrixXd jacobian = irb120_fwd_solver.jacobian2(joint_states_);
 		flange_with_respect_to_robot = irb120_fwd_solver.fwd_kin_solve(joint_states_);
 		sensor_with_respect_to_robot = flange_with_respect_to_robot * sensor_with_respect_to_flange;
-		tool_with_respect_to_robot = sensor_with_respect_to_robot * tool_with_repsect_to_sensor;
+		tool_with_respect_to_robot_ = sensor_with_respect_to_robot * tool_with_repsect_to_sensor;
 		Eigen::FullPivLU<Eigen::MatrixXd> lu_jac(jacobian);
 		if(!lu_jac.isInvertible()) continue; // Jump to the next iteration in the loop if inverse is not defined
 		Eigen::MatrixXd jacobian_inv = lu_jac.inverse(); // TODO what to do when matrix is non invertible?   
 		Eigen::MatrixXd jacobian_transpose = jacobian.transpose();
 
 		// Find current end effector pose
-		current_end_effector_pose.head(3) = tool_with_respect_to_robot.translation();
-		current_end_effector_pose.tail(3) = decompose_rot_mat(tool_with_respect_to_robot.linear()); 
-		Eigen::Quaterniond flange_quat(tool_with_respect_to_robot.linear());
+		current_end_effector_pose.head(3) = tool_with_respect_to_robot_.translation();
+		current_end_effector_pose.tail(3) = decompose_rot_mat(tool_with_respect_to_robot_.linear()); 
+		Eigen::Quaterniond flange_quat(tool_with_respect_to_robot_.linear());
 
 		// Find tool's current x, y, and z vector for use in skills 
-		tool_R = tool_with_respect_to_robot.linear();
+		tool_R = tool_with_respect_to_robot_.linear();
 		Eigen::Vector3d x_vec = tool_R.col(0);
 		Eigen::Vector3d y_vec = tool_R.col(1);
 		Eigen::Vector3d z_vec = tool_R.col(2);
@@ -435,19 +442,19 @@ int main(int argc, char **argv) {
 			virtual_attractor_pos(1) = bumpless_virtual_attractor_position(1);
 			virtual_attractor_pos(2) = bumpless_virtual_attractor_position(2);
 			// Find bumpless virtual attractor angles: (the negative torque divided by the anglular spring constant) plus (the angle of the tool with respect to the robot)
-			bumpless_virtual_attractor_angles(0) =  -wrench_with_respect_to_robot(3) / K_virtual_angular + decompose_rot_mat(tool_with_respect_to_robot.linear())(0);
-			bumpless_virtual_attractor_angles(1) =  -wrench_with_respect_to_robot(4) / K_virtual_angular + decompose_rot_mat(tool_with_respect_to_robot.linear())(1);
-			bumpless_virtual_attractor_angles(2) =  -wrench_with_respect_to_robot(5) / K_virtual_angular + decompose_rot_mat(tool_with_respect_to_robot.linear())(2);
+			bumpless_virtual_attractor_angles(0) =  -wrench_with_respect_to_robot(3) / K_virtual_angular + decompose_rot_mat(tool_with_respect_to_robot_.linear())(0);
+			bumpless_virtual_attractor_angles(1) =  -wrench_with_respect_to_robot(4) / K_virtual_angular + decompose_rot_mat(tool_with_respect_to_robot_.linear())(1);
+			bumpless_virtual_attractor_angles(2) =  -wrench_with_respect_to_robot(5) / K_virtual_angular + decompose_rot_mat(tool_with_respect_to_robot_.linear())(2);
 			// Update the virtual attractor rotation matrix
 			virtual_attractor_rotation_matrix = rotation_matrix_from_euler_angles(bumpless_virtual_attractor_angles);
 
 			// Calculate the virtual forces
 			virtual_force.head(3) = K_virtual_translational * (virtual_attractor_pos - current_end_effector_pose.head(3));
-			virtual_force.tail(3) = K_virtual_angular * (delta_phi_from_rots(tool_with_respect_to_robot.linear(), virtual_attractor_rotation_matrix));
+			virtual_force.tail(3) = K_virtual_angular * (delta_phi_from_rots(tool_with_respect_to_robot_.linear(), virtual_attractor_rotation_matrix));
 			// Output 
 			cout<<"Bumpless attractor used"<<endl;
 			cout<<"wrench torques"<<endl<<wrench_with_respect_to_robot.tail(3)<<endl;
-			cout<<"decomposed angles of the tool frame"<<endl<<decompose_rot_mat(tool_with_respect_to_robot.linear())<<endl;
+			cout<<"decomposed angles of the tool frame"<<endl<<decompose_rot_mat(tool_with_respect_to_robot_.linear())<<endl;
 			cout<<"bumpless virtual attractor pose: "<<endl;
 			cout<<bumpless_virtual_attractor_position<<endl;
 		}
@@ -458,7 +465,7 @@ int main(int argc, char **argv) {
 			if(virtual_attractor_established) {
 				// Calculate the virtual forces
 				virtual_force.head(3) = K_virtual_translational * (virtual_attractor_pos - current_end_effector_pose.head(3));
-				virtual_force.tail(3) = K_virtual_angular * (delta_phi_from_rots(tool_with_respect_to_robot.linear(), virtual_attractor_rotation_matrix));
+				virtual_force.tail(3) = K_virtual_angular * (delta_phi_from_rots(tool_with_respect_to_robot_.linear(), virtual_attractor_rotation_matrix));
 				// Output
 				cout<<"virtual attractor pose"<<endl;
 				cout<<virtual_attractor_pos<<endl;
