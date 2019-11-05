@@ -14,7 +14,7 @@ vector<double> g_desired_joint_angles;
 bool jnt_cmd = true, cart_cmd = false;
 geometry_msgs::Pose g_des_pose;
 geometry_msgs::Twist g_des_twist;
-vector<double> home_vec{0,-40,15,0,25,0}; // Pencil and knife starting position
+vector<double> home_vec{0,-40,8,0,30,0}; // Pencil and knife starting position
 //vector<double> home_vec{0,-28,7,0,20,0}; // changed [5] from 19 to 21 7/22/19 // Everything else starting position
 //{0,-28,7,0,20,0}; {0,-20,7,0,18,0};
 vector<double> zero_vec{0,0,0,0,0,0};

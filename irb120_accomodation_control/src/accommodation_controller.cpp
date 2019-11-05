@@ -59,6 +59,7 @@ Eigen::MatrixXd task_frame_rotation_matrix_;
 Eigen::Vector3d x_vec_task_;
 Eigen::Vector3d y_vec_task_;
 Eigen::Vector3d z_vec_task_;
+geometry_msgs::PoseStamped  task_frame_pose_stamped;
 
 // MATH: Function converts a rotation matrix to a vector of angles (phi_x, phi_y, phi_z)
 Eigen::Vector3d decompose_rot_mat(Eigen::Matrix3d rot_mat) {
@@ -226,6 +227,16 @@ bool setTaskFrameCallback(irb120_accomodation_control::set_task_frameRequest &re
 	z_vec_task_message_.y = z_vec_task_(1);
 	z_vec_task_message_.z = z_vec_task_(2);
 
+	// Define task frame as a pose stamped
+	 task_frame_pose_stamped.pose.position.x = tool_with_respect_to_robot_.translation()(0);
+	 task_frame_pose_stamped.pose.position.y = tool_with_respect_to_robot_.translation()(1);
+	 task_frame_pose_stamped.pose.position.z = tool_with_respect_to_robot_.translation()(2);
+	 Eigen::Quaterniond task_frame_orientation_quaternion(tool_with_respect_to_robot_.linear());
+	 task_frame_pose_stamped.pose.orientation.x = task_frame_orientation_quaternion.x();
+	 task_frame_pose_stamped.pose.orientation.y = task_frame_orientation_quaternion.y();
+	 task_frame_pose_stamped.pose.orientation.z = task_frame_orientation_quaternion.z();
+	 task_frame_pose_stamped.pose.orientation.w = task_frame_orientation_quaternion.w();
+
 	response.status = "task frame set"; 
 	return true; 
 }
@@ -246,6 +257,8 @@ int main(int argc, char **argv) {
 	// ROS: Publishers send data to these topics
 	ros::Publisher arm_publisher = nh.advertise<sensor_msgs::JointState>("abb120_joint_angle_command",1); // TODO CHANGE FOR ROBOT AGNOSTIC
 	ros::Publisher cart_log_pub = nh.advertise<geometry_msgs::PoseStamped>("cartesian_logger",1); // ROS: Publish the cartesian coordinates of the end effector in the robot coordinate frame
+	ros::Publisher robot_frame_pub = nh.advertise<geometry_msgs::PoseStamped>("robot_frame",1); // ROS: Publish a zero pose stamped to visualize the robot frame
+	ros::Publisher task_frame_pub = nh.advertise<geometry_msgs::PoseStamped>("task_frame",1); // ROS: Publish the task frame
 	ros::Publisher ft_pub = nh.advertise<geometry_msgs::Wrench>("transformed_ft_wrench",1); // ROS: Publish the force-torque wrench in the robot coordinate frame
 	ros::Publisher virtual_attractor_after_tf = nh.advertise<geometry_msgs::PoseStamped>("tfd_virt_attr",1); // ROS: Publish the virtual attractor pose in the robot coordinate frame
 	ros::Publisher bumpless_virtual_attractor_after_tf = nh.advertise<geometry_msgs::PoseStamped>("bumpless_tfd_virt_attr",1); // ROS: Publish the bumpless virtual attractor pose calculated from the force-torque wrench
@@ -293,6 +306,10 @@ int main(int argc, char **argv) {
 	geometry_msgs::PoseStamped cartesian_log, virtual_attractor_log, bumpless_virtual_attractor_log;
 	geometry_msgs::Pose virtual_attractor;
 	geometry_msgs::Wrench transformed_wrench;
+
+	// Declare a zero PoseStamped for robot frame visualization
+	geometry_msgs::PoseStamped robot_frame_pose_stamped;
+	robot_frame_pose_stamped.header.frame_id = "map";
 
 	// ROS: Format messages for ROS communications
 	cartesian_log.header.frame_id = "map";
@@ -379,6 +396,17 @@ int main(int argc, char **argv) {
 	z_vec_task_message_.x = z_vec_task_(0);
 	z_vec_task_message_.y = z_vec_task_(1);
 	z_vec_task_message_.z = z_vec_task_(2);
+
+	// Define task frame as a pose stamped
+	 task_frame_pose_stamped.pose.position.x = tool_with_respect_to_robot_.translation()(0);
+	 task_frame_pose_stamped.pose.position.y = tool_with_respect_to_robot_.translation()(1);
+	 task_frame_pose_stamped.pose.position.z = tool_with_respect_to_robot_.translation()(2);
+	 Eigen::Quaterniond task_frame_orientation_quaternion(tool_with_respect_to_robot_.linear());
+	 task_frame_pose_stamped.pose.orientation.x = task_frame_orientation_quaternion.x();
+	 task_frame_pose_stamped.pose.orientation.y = task_frame_orientation_quaternion.y();
+	 task_frame_pose_stamped.pose.orientation.z = task_frame_orientation_quaternion.z();
+	 task_frame_pose_stamped.pose.orientation.w = task_frame_orientation_quaternion.w();
+	 task_frame_pose_stamped.header.frame_id = "map";
 
 	// Declare the bumpless virtual attractor's pose
 	Eigen::VectorXd bumpless_virtual_attractor_position(3);
@@ -542,6 +570,14 @@ int main(int argc, char **argv) {
 		virtual_attractor_log.pose.orientation.z = virt_quat.z();
 		virtual_attractor_log.header.stamp = ros::Time::now();
 		virtual_attractor_after_tf.publish(virtual_attractor_log);
+
+		// Publish zero posed stamp for robot frame visualization in rviz
+		robot_frame_pose_stamped.header.stamp = ros::Time::now();
+		robot_frame_pub.publish(robot_frame_pose_stamped);
+
+		// Publish the task frame for visualization in rviz
+		task_frame_pose_stamped.header.stamp = ros::Time::now();
+		task_frame_pub.publish(task_frame_pose_stamped);
 
 		//publish coordinates of bumpless virtual attractor
 		/*
