@@ -398,15 +398,15 @@ int main(int argc, char **argv) {
 	z_vec_task_message_.z = z_vec_task_(2);
 
 	// Define task frame as a pose stamped
-	 task_frame_pose_stamped.pose.position.x = tool_with_respect_to_robot_.translation()(0);
-	 task_frame_pose_stamped.pose.position.y = tool_with_respect_to_robot_.translation()(1);
-	 task_frame_pose_stamped.pose.position.z = tool_with_respect_to_robot_.translation()(2);
-	 Eigen::Quaterniond task_frame_orientation_quaternion(tool_with_respect_to_robot_.linear());
-	 task_frame_pose_stamped.pose.orientation.x = task_frame_orientation_quaternion.x();
-	 task_frame_pose_stamped.pose.orientation.y = task_frame_orientation_quaternion.y();
-	 task_frame_pose_stamped.pose.orientation.z = task_frame_orientation_quaternion.z();
-	 task_frame_pose_stamped.pose.orientation.w = task_frame_orientation_quaternion.w();
-	 task_frame_pose_stamped.header.frame_id = "map";
+	task_frame_pose_stamped.pose.position.x = tool_with_respect_to_robot_.translation()(0);
+	task_frame_pose_stamped.pose.position.y = tool_with_respect_to_robot_.translation()(1);
+	task_frame_pose_stamped.pose.position.z = tool_with_respect_to_robot_.translation()(2);
+	Eigen::Quaterniond task_frame_orientation_quaternion(tool_with_respect_to_robot_.linear());
+	task_frame_pose_stamped.pose.orientation.x = task_frame_orientation_quaternion.x();
+	task_frame_pose_stamped.pose.orientation.y = task_frame_orientation_quaternion.y();
+	task_frame_pose_stamped.pose.orientation.z = task_frame_orientation_quaternion.z();
+	task_frame_pose_stamped.pose.orientation.w = task_frame_orientation_quaternion.w();
+	task_frame_pose_stamped.header.frame_id = "map";
 
 	// Declare the bumpless virtual attractor's pose
 	Eigen::VectorXd bumpless_virtual_attractor_position(3);

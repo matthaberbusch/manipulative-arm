@@ -22,6 +22,9 @@ geometry_msgs::PoseStamped virt_attr_pose;
 geometry_msgs::Wrench ft_wrench;
 sensor_msgs::JointState joint_state;
 
+geometry_msgs::PoseStamped robot_frame;
+geometry_msgs::PoseStamped task_frame;
+
 std::string program_name;
 std::string exit_status;
 std::string start_status;
@@ -57,6 +60,14 @@ void joint_state_callback(const sensor_msgs::JointState& joint_state_from_sub) {
 	joint_state = joint_state_from_sub;
 }
 
+void robot_frame_callback(const geometry_msgs::PoseStamped& robot_frame_from_sub) {
+	robot_frame = robot_frame_from_sub;
+}
+
+void task_frame_callback(const geometry_msgs::PoseStamped& task_frame_from_sub) {
+	task_frame = task_frame_from_sub;
+}
+
 bool exit_status_callback(behavior_algorithms::status_serviceRequest& request, behavior_algorithms::status_serviceResponse& response){
 	program_name = request.name.c_str();
 	exit_status = request.status.c_str();
@@ -81,6 +92,9 @@ struct RobotDataStruct {
 	std::string program_name;
 	std::string start_status;
 	std::string exit_status;
+
+	geometry_msgs::PoseStamped robot_frame;
+	geometry_msgs::PoseStamped task_frame;
 };
 
 int main(int argc, char **argv) {
@@ -94,11 +108,18 @@ int main(int argc, char **argv) {
 	ros::Subscriber ft_wrench_sub = nh.subscribe("transformed_ft_wrench",1,ft_wrench_callback);
 	ros::Subscriber joint_state_sub = nh.subscribe("abb120_joint_state",1,joint_state_callback);
 
+	ros::Subscriber robot_frame_sub = nh.subscribe("robot_frame",1,robot_frame_callback);
+	ros::Subscriber task_frame_sub = nh.subscribe("task_frame",1,task_frame_callback);
+
+
 	// Publishers
 	ros::Publisher ee_pose_pub = nh.advertise<geometry_msgs::PoseStamped>("delayed_ee_pose",1);
 	ros::Publisher virt_attr_pose_pub = nh.advertise<geometry_msgs::PoseStamped>("delayed_virt_attr_pose",1);
 	ros::Publisher ft_wrench_pub = nh.advertise<geometry_msgs::Wrench>("delayed_ft_wrench",1);
 	ros::Publisher joint_state_pub = nh.advertise<sensor_msgs::JointState>("delayed_joint_state",1);
+
+	ros::Publisher robot_frame_pub = nh.advertise<geometry_msgs::PoseStamped>("robot_frame",1); // ROS: Publish a zero pose stamped to visualize the robot frame
+	ros::Publisher task_frame_pub = nh.advertise<geometry_msgs::PoseStamped>("task_frame",1); // ROS: Publish the task frame
 
 	// Services
 	ros::ServiceServer status_service = nh.advertiseService("status_service", exit_status_callback);
@@ -115,6 +136,9 @@ int main(int argc, char **argv) {
 	robot_data[0].virt_attr_pose = virt_attr_pose;
 	robot_data[0].ft_wrench = ft_wrench;
 	robot_data[0].joint_state = joint_state;
+
+	robot_data[0].robot_frame = robot_frame;
+	robot_data[0].task_frame = task_frame;
 
 	ros::Rate naptime(1/dt_);
 
@@ -166,6 +190,9 @@ int main(int argc, char **argv) {
 		// ROS_INFO("Write counter: %d",write_counter);
 		// ROS_INFO("Force written: %f",robot_data[write_counter].ft_wrench.force.x);
 
+		robot_data[write_counter].robot_frame = robot_frame;
+		robot_data[write_counter].task_frame = task_frame;
+
 
 		ee_pose_pub.publish(robot_data[read_counter].ee_pose);
 		virt_attr_pose_pub.publish(robot_data[read_counter].virt_attr_pose);
@@ -173,6 +200,9 @@ int main(int argc, char **argv) {
 		joint_state_pub.publish(robot_data[read_counter].joint_state);
 		// ROS_INFO("Read counter: %d",read_counter);
 		// ROS_INFO("Force read: %f",robot_data[read_counter].ft_wrench.force.x);
+
+		robot_frame_pub.publish(robot_data[read_counter].robot_frame);
+		task_frame_pub.publish(robot_data[read_counter].task_frame);
 
 		// Increase counter
 		write_counter = write_counter + 1;
