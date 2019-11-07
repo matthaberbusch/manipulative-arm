@@ -39,12 +39,12 @@ class Application(tk.Frame):
         self.motion_control = ttk.Frame(self.tab_control)
         self.orientation_control = ttk.Frame(self.tab_control)
         self.wiggle_control = ttk.Frame(self.tab_control)
-        self.zeroing_control = ttk.Frame(self.tab_control)
+        self.misc_commands = ttk.Frame(self.tab_control)
 
         self.tab_control.add(self.motion_control, text='Motion Control')
         self.tab_control.add(self.orientation_control, text='Orientation Control')
         self.tab_control.add(self.wiggle_control, text='Wiggle Control')
-        self.tab_control.add(self.zeroing_control, text='Zeroing Control')
+        self.tab_control.add(self.misc_commands, text='Misc. Commands')
 
     # Pack and display the tabs
 
@@ -487,16 +487,16 @@ class Application(tk.Frame):
 
 
         # Button for Zero Forces
-        self.zero_forces = tk.Button(self.zeroing_control,
+        self.zero_forces = tk.Button(self.misc_commands,
                 text='Zero all Forces', fg='blue',
                 command=self.zero_forces, font='Courier 20 bold')
         self.zero_forces.grid(row=0, column=0,
                 sticky=tk.NSEW, pady=5, padx=2)
 
         # Button for Setting Task Frame
-        self.set_task_frame = tk.Button(self.zeroing_control,
+        self.set_task_frame = tk.Button(self.misc_commands,
                 text='Set Task Frame', fg='blue',
-                command=self.zero_forces, font='Courier 20 bold')
+                command=self.set_task_frame, font='Courier 20 bold')
         self.set_task_frame.grid(row=1, column=0,
                 sticky=tk.NSEW, pady=5, padx=2)
 
