@@ -84,9 +84,7 @@ int main(int argc, char** argv) {
     // Parameter for if in the cutting state, easier checking later
     bool cutting = false;
 
-    // Used in the loop to determine the run time and time out
-    double total_number_of_loops = RUN_TIME / DT;
-    double loops_so_far = 0;
+    
 
     // Variable for which set of parameters to use
     string param_set = "Peg";
@@ -137,13 +135,13 @@ int main(int argc, char** argv) {
     }
     else if (!strcmp(param_set.c_str(), "Cutting")){
         // set the other values here
-        PULL_DISTANCE = 0.005;
-        FORCE_THRESHOLD = 2.5;
-        NONDIRECTIONAL_FORCE_THRESHOLD = 5;
+        PULL_DISTANCE = 0.006;
+        FORCE_THRESHOLD = 4;
+        NONDIRECTIONAL_FORCE_THRESHOLD = 7;
         TORQUE_THRESHOLD = 2;
         KEEP_CONTACT_DISTANCE = 0;
-        KEEP_CUTTING_DISTANCE = 0.001;
-        RUN_TIME = 30;
+        KEEP_CUTTING_DISTANCE = 0.00075; // was 0.001
+        RUN_TIME = 90;
 
         cutting = true;
         ROS_INFO("Params set for CUTTING");
@@ -169,7 +167,6 @@ int main(int argc, char** argv) {
 
     // Set as unknown in case program somehow progresses past loop without any of the 3 conditions
     srv.request.status = "Unkown";
-
 
     // ROS: Wait until we have position data. Our default position is 0.
     while(current_pose.position.x == 0 || tool_vector_z.x == 0 || task_vector_z.x == 0) ros::spinOnce();
@@ -205,10 +202,10 @@ int main(int argc, char** argv) {
     bool target_reached;
 
     if(TARGET_DISTANCE < 0){
-        target_reached = dot_product > 0;
+        target_reached = dot_product >= 0;
     }
     else {
-        target_reached = dot_product < 0;
+        target_reached = dot_product <= 0;
     }
 
     // Debug output
@@ -223,6 +220,10 @@ int main(int argc, char** argv) {
                                  (abs(ft_in_robot_frame.force.x) > FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.y) > NONDIRECTIONAL_FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.z) > NONDIRECTIONAL_FORCE_THRESHOLD));
 
 
+    // Used in the loop to determine the run time and time out
+    double total_number_of_loops = RUN_TIME / DT;
+    double loops_so_far = 0;
+
     // Begin loop
     // Assuming we're always going in the x direction.
     /*
@@ -231,6 +232,8 @@ int main(int argc, char** argv) {
     2. One of the effort thresholds has been crossed
     3. The target orientation has been reached
     */
+
+    
     while( (loops_so_far <= total_number_of_loops) && !effort_limit_crossed && !target_reached ) {
         // ROS: for communication between programs
         ros::spinOnce();
@@ -244,11 +247,13 @@ int main(int argc, char** argv) {
                 virtual_attractor.pose.position.x = current_pose.position.x + task_vector_z.x * PULL_DISTANCE;
                 virtual_attractor.pose.position.y = current_pose.position.y + task_vector_z.y * PULL_DISTANCE;
                 virtual_attractor.pose.position.z = current_pose.position.z + task_vector_z.z * PULL_DISTANCE;
+                cout<<"CUTTING"<<endl;
             }
             else{
                 virtual_attractor.pose.position.x = current_pose.position.x + tool_vector_z.x * PULL_DISTANCE;
                 virtual_attractor.pose.position.y = current_pose.position.y + tool_vector_z.y * PULL_DISTANCE;
                 virtual_attractor.pose.position.z = current_pose.position.z + tool_vector_z.z * PULL_DISTANCE;
+                cout<<"not CUTTING"<<endl;
             }
         }
         // Move in direction of the task frame when in cutting mode, else move in tool frame
@@ -257,11 +262,13 @@ int main(int argc, char** argv) {
                 virtual_attractor.pose.position.x = current_pose.position.x - task_vector_z.x * PULL_DISTANCE;
                 virtual_attractor.pose.position.y = current_pose.position.y - task_vector_z.y * PULL_DISTANCE;
                 virtual_attractor.pose.position.z = current_pose.position.z - task_vector_z.z * PULL_DISTANCE;
+                cout<<"CUTTING"<<endl;
             }
             else{   
                 virtual_attractor.pose.position.x = current_pose.position.x - tool_vector_z.x * PULL_DISTANCE;
                 virtual_attractor.pose.position.y = current_pose.position.y - tool_vector_z.y * PULL_DISTANCE;
                 virtual_attractor.pose.position.z = current_pose.position.z - tool_vector_z.z * PULL_DISTANCE;
+                cout<<"not CUTTING"<<endl;
             }
         }
 
@@ -274,10 +281,10 @@ int main(int argc, char** argv) {
         
         // If it is past the plane perpendicular to the direction of movement at the goal position, then we have reached the target 
         if(TARGET_DISTANCE < 0){
-            target_reached = dot_product > 0;
+            target_reached = dot_product >= 0;
         }
         else {
-            target_reached = dot_product < 0;
+            target_reached = dot_product <= 0;
         }
 
         // Update the values for the loop condition
@@ -383,6 +390,12 @@ int main(int argc, char** argv) {
         ROS_ERROR("Failed to call service status_service");
     }
     
+    // debug out
+    cout<<"Tool Vec Z"<<endl;
+    cout<<tool_vector_z<<endl;
+    cout<<"Task Vec Z"<<endl;
+    cout<<task_vector_z<<endl<<endl;
+
     // ROS: for communication between programs
     virtual_attractor_publisher.publish(virtual_attractor);
     naptime.sleep();

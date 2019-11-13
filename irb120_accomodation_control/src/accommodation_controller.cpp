@@ -228,10 +228,10 @@ bool setTaskFrameCallback(irb120_accomodation_control::set_task_frameRequest &re
 	z_vec_task_message_.z = z_vec_task_(2);
 
 	// Define task frame as a pose stamped
-	 task_frame_pose_stamped.pose.position.x = tool_with_respect_to_robot_.translation()(0);
-	 task_frame_pose_stamped.pose.position.y = tool_with_respect_to_robot_.translation()(1);
-	 task_frame_pose_stamped.pose.position.z = tool_with_respect_to_robot_.translation()(2);
-	 Eigen::Quaterniond task_frame_orientation_quaternion(tool_with_respect_to_robot_.linear());
+	 task_frame_pose_stamped.pose.position.x = task_frame_with_respect_to_robot_.translation()(0);
+	 task_frame_pose_stamped.pose.position.y = task_frame_with_respect_to_robot_.translation()(1);
+	 task_frame_pose_stamped.pose.position.z = task_frame_with_respect_to_robot_.translation()(2);
+	 Eigen::Quaterniond task_frame_orientation_quaternion(task_frame_with_respect_to_robot_.linear());
 	 task_frame_pose_stamped.pose.orientation.x = task_frame_orientation_quaternion.x();
 	 task_frame_pose_stamped.pose.orientation.y = task_frame_orientation_quaternion.y();
 	 task_frame_pose_stamped.pose.orientation.z = task_frame_orientation_quaternion.z();
@@ -297,7 +297,7 @@ int main(int argc, char **argv) {
 	
 	// Define damping and gains
 	double B_virtual_translational = 4000; 
-	double B_virtual_rotational = 100; 
+	double B_virtual_rotational = 100; // was 100
 	double K_virtual_translational = 1000; 
 	double K_virtual_angular = 40;
 	
@@ -349,7 +349,7 @@ int main(int argc, char **argv) {
 	Eigen::Affine3d tool_with_repsect_to_sensor;
 	Eigen::Matrix3d tool_with_repsect_to_sensor_rotation = Eigen::Matrix3d::Identity();
 	Eigen::Vector3d tool_with_repsect_to_sensor_translation;
-	tool_with_repsect_to_sensor_translation<<0,0,0.24; // 0,0,0.1 is old one
+	tool_with_repsect_to_sensor_translation<<0,0,0; // 0,0,0.1 is old one, 0.24 with pencil
 	tool_with_repsect_to_sensor.linear() = tool_with_repsect_to_sensor_rotation;
 	tool_with_repsect_to_sensor.translation() = tool_with_repsect_to_sensor_translation;
 	
@@ -362,7 +362,14 @@ int main(int argc, char **argv) {
 	Eigen::Affine3d flange_with_respect_to_robot = irb120_fwd_solver.fwd_kin_solve(joint_states_);
 	Eigen::Affine3d sensor_with_respect_to_robot = flange_with_respect_to_robot * sensor_with_respect_to_flange;
 	tool_with_respect_to_robot_ = sensor_with_respect_to_robot * tool_with_repsect_to_sensor;
-	task_frame_with_respect_to_robot_ = tool_with_respect_to_robot_;
+	//task_frame_with_respect_to_robot_ = tool_with_respect_to_robot_;
+
+	// Define default/starting transform for the task frame, set from values obtained with a working task frame. Can be updated by calling service
+	task_frame_with_respect_to_robot_.translation() = Eigen::Vector3d(0.949345922741,0.00167035566543,0.741465747577);
+	Eigen::Quaterniond rot(0.49080197581,0.492946916981,0.50987648389,0.50610545221);
+	task_frame_with_respect_to_robot_.linear() = rot.toRotationMatrix();
+
+	// Define 
 	Eigen::VectorXd initial_end_effector_pose = Eigen::VectorXd::Zero(6); 
 	initial_end_effector_pose.head(3) = tool_with_respect_to_robot_.translation();
 	initial_end_effector_pose.tail(3) = decompose_rot_mat(tool_with_respect_to_robot_.linear());
@@ -398,10 +405,10 @@ int main(int argc, char **argv) {
 	z_vec_task_message_.z = z_vec_task_(2);
 
 	// Define task frame as a pose stamped
-	task_frame_pose_stamped.pose.position.x = tool_with_respect_to_robot_.translation()(0);
-	task_frame_pose_stamped.pose.position.y = tool_with_respect_to_robot_.translation()(1);
-	task_frame_pose_stamped.pose.position.z = tool_with_respect_to_robot_.translation()(2);
-	Eigen::Quaterniond task_frame_orientation_quaternion(tool_with_respect_to_robot_.linear());
+	task_frame_pose_stamped.pose.position.x =  task_frame_with_respect_to_robot_.translation()(0);
+	task_frame_pose_stamped.pose.position.y =  task_frame_with_respect_to_robot_.translation()(1);
+	task_frame_pose_stamped.pose.position.z =  task_frame_with_respect_to_robot_.translation()(2);
+	Eigen::Quaterniond task_frame_orientation_quaternion( task_frame_with_respect_to_robot_.linear());
 	task_frame_pose_stamped.pose.orientation.x = task_frame_orientation_quaternion.x();
 	task_frame_pose_stamped.pose.orientation.y = task_frame_orientation_quaternion.y();
 	task_frame_pose_stamped.pose.orientation.z = task_frame_orientation_quaternion.z();

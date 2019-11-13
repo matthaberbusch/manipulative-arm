@@ -39,8 +39,9 @@ const double DH_d1 = 0.290;
 const double DH_d2 = 0.0;
 const double DH_d3 = 0.0;
 const double DH_d4 = 0.302;
-const double DH_d5 = 0.0;
-const double DH_d6 = 0.072 + 0.08 + 0.24 + 0; // plus sensor, plus tool, plus RCC FOR REMOTE CENTER OF COMPLIANCE 7/21/19 //0.072
+const double DH_d5 = 0.0;           
+const double DH_d6 = 0.072 + 0.08 + 0 + 0; // removed tool
+// const double DH_d6 = 0.072 + 0.08 + 0.24 + 0; // plus sensor, plus tool, plus RCC FOR REMOTE CENTER OF COMPLIANCE 7/21/19 //0.072
 //was const double DH_d6 = 0.072 + 0.08 + 0.1 + 0; on 10/31/19
 
 

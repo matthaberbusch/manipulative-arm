@@ -17,6 +17,7 @@
 #include <Eigen/QR>
 #include <Eigen/Dense>
 #include <behavior_algorithms/status_service.h>
+#include <math.h>
 using namespace std;
 
 // Declare variables
@@ -25,8 +26,6 @@ geometry_msgs::PoseStamped virtual_attractor;
 geometry_msgs::Wrench ft_in_robot_frame;
 Eigen::VectorXd joint_states = Eigen::VectorXd::Zero(6);
 
-// Used to calculate oirentation
-geometry_msgs::Vector3 tool_vector_y;
 
 // ROS: callback functions for how we receive data
 void cartesian_state_callback(const geometry_msgs::PoseStamped& cartesian_pose) {
@@ -41,10 +40,6 @@ void jointStateCallback(const sensor_msgs::JointState& joint_state) {
     for(int i = 0; i < 6; i++) joint_states(i) = joint_state.position[i] ;
 
 }
-void tool_vector_callback(const geometry_msgs::Vector3& tool_vector_msg_y) {
-    tool_vector_y = tool_vector_msg_y;
-}
-
 // ROS: main program
 int main(int argc, char** argv) {
     // ROS: for communication between programs
@@ -56,7 +51,6 @@ int main(int argc, char** argv) {
     ros::Subscriber ft_subscriber = nh.subscribe("transformed_ft_wrench",1,ft_callback);                       // subscribe to the force/torque sensor data
     ros::Subscriber joint_state_sub = nh.subscribe("abb120_joint_state",1,jointStateCallback);                 // subscribe to the state of joints to get the orientation of the end effector for rotation
     ros::Publisher virtual_attractor_publisher = nh.advertise<geometry_msgs::PoseStamped>("Virt_attr_pose",1); // publish the pose of the virtual attractor for the accomodation controller 
-    ros::Subscriber tool_vector_sub_y = nh.subscribe("tool_vector_y",1,tool_vector_callback);                  // subscribe to the value of the tool vector in the z, published from the accomodation controller
 
     // ROS: Services used in conjunction with buffer.cpp to have delayed program status sent to operator
     ros::ServiceClient client = nh.serviceClient<behavior_algorithms::status_service>("status_service");
@@ -80,7 +74,7 @@ int main(int argc, char** argv) {
     TARGET_ORIENTATION: will change with user input, how far and in what direction the end effector moves
     *///                                                                      was  0.1
     double DT = 0.01, TORQUE_THRESHOLD = 0.4, FORCE_THRESHOLD = 15, ROTATE_ANGLE = 0.05, KEEP_CONTACT_ANGLE = 0.1, TARGET_ORIENTATION = 0.05; // Do not increase the virtual attractor angle greater than 1.55 radians
-    double KEEP_CONTACT_DISTANCE = 0.015, ROTATION_ERROR_THRESHOLD = .05; //0.05;
+    double KEEP_CONTACT_DISTANCE = 0.015, ROTATION_ERROR_THRESHOLD = 0.02; //0.05;
     double RUN_TIME = 75;
     double total_number_of_loops = RUN_TIME / DT;
     double loops_so_far = 0;
@@ -161,25 +155,25 @@ int main(int argc, char** argv) {
     current_pose_quat.w() = current_pose.orientation.w;
     
     Eigen::Matrix3d current_pose_rot = current_pose_quat.normalized().toRotationMatrix();
-    double current_orientation = joint_states(5); //  change how this is defined
-    double start_orientation = current_orientation;
-    double target_orientation = start_orientation + TARGET_ORIENTATION;
+    // double current_orientation = joint_states(5); //  change how this is defined
+    // double start_orientation = current_orientation;
+    // double target_orientation = start_orientation + TARGET_ORIENTATION;
 
     if (TARGET_ORIENTATION < 0){
         ROTATE_ANGLE = -ROTATE_ANGLE;
     }
 
-     // MATH: Define rotation matrix for moving
-    Eigen::Matrix3d DESTINATION_ROTATION_MATRIX;
-    DESTINATION_ROTATION_MATRIX(0,0) = 1;
-    DESTINATION_ROTATION_MATRIX(0,1) = 0;
-    DESTINATION_ROTATION_MATRIX(0,2) = 0;
-    DESTINATION_ROTATION_MATRIX(1,0) = 0;
-    DESTINATION_ROTATION_MATRIX(1,1) = cos(TARGET_ORIENTATION);
-    DESTINATION_ROTATION_MATRIX(1,2) = -sin(TARGET_ORIENTATION);
-    DESTINATION_ROTATION_MATRIX(2,0) = 0;
-    DESTINATION_ROTATION_MATRIX(2,1) = sin(TARGET_ORIENTATION);
-    DESTINATION_ROTATION_MATRIX(2,2) = cos(TARGET_ORIENTATION);
+    // MATH: Define the rotation matrix to the destination
+    Eigen::Matrix3d TO_DESTINATION_ROTATION_MATRIX;
+    TO_DESTINATION_ROTATION_MATRIX(0,0) = 1;
+    TO_DESTINATION_ROTATION_MATRIX(0,1) = 0;
+    TO_DESTINATION_ROTATION_MATRIX(0,2) = 0;
+    TO_DESTINATION_ROTATION_MATRIX(1,0) = 0;
+    TO_DESTINATION_ROTATION_MATRIX(1,1) = cos(TARGET_ORIENTATION);
+    TO_DESTINATION_ROTATION_MATRIX(1,2) = -sin(TARGET_ORIENTATION);
+    TO_DESTINATION_ROTATION_MATRIX(2,0) = 0;
+    TO_DESTINATION_ROTATION_MATRIX(2,1) = sin(TARGET_ORIENTATION);
+    TO_DESTINATION_ROTATION_MATRIX(2,2) = cos(TARGET_ORIENTATION);
 
 
      // MATH: Define rotation matrix for moving
@@ -195,33 +189,34 @@ int main(int argc, char** argv) {
     ROT_MAT_MOVE(2,2) = cos(ROTATE_ANGLE);
 
     // Goal Rotation Matrix
-    Eigen::Matrix3d goal_pose_rot = DESTINATION_ROTATION_MATRIX * current_pose_rot;
+    Eigen::Matrix3d goal_pose_rot = current_pose_rot * TO_DESTINATION_ROTATION_MATRIX;
+    
+    // Calculate the angle between the two orientatnions using quaternions
+    Eigen::Quaterniond goal_pose_quat(goal_pose_rot);
+    Eigen::Quaterniond diff_quat;
+
+    diff_quat = current_pose_quat * goal_pose_quat.inverse();
+    double theta = 2 * asin(abs(diff_quat.w()));
 
     // Print starting and target positions
-    cout<<"current_orientation: "<<endl<<current_orientation<<endl;
-    cout<<"Starting orientation: "<<endl<<start_orientation<<endl;
-    cout<<"Target orientation: "<<endl<<target_orientation<<endl;
-    cout<<"Starting Rotation Matrix"<<endl<<current_pose_rot<<endl;
-    cout<<"Goal Rotation Matrix"<<endl<<goal_pose_rot<<endl;
-    cout<<"Calculated Rotation Matrix"<<endl<<DESTINATION_ROTATION_MATRIX<<endl;
-    cout<<"Differences for each section:"<<endl;
-    cout<<(abs(current_pose_rot(0,0) - goal_pose_rot(0,0)))<<","<<(abs(current_pose_rot(0,1) - goal_pose_rot(0,1)))<<","<<(abs(current_pose_rot(0,2) - goal_pose_rot(0,2)))<<endl;
-    cout<<(abs(current_pose_rot(1,0) - goal_pose_rot(1,0)))<<","<<(abs(current_pose_rot(1,1) - goal_pose_rot(1,1)))<<","<<(abs(current_pose_rot(1,2) - goal_pose_rot(1,2)))<<endl;
-    cout<<(abs(current_pose_rot(2,0) - goal_pose_rot(2,0)))<<","<<(abs(current_pose_rot(2,1) - goal_pose_rot(2,1)))<<","<<(abs(current_pose_rot(2,2) - goal_pose_rot(2,2)))<<endl;
+    cout<<"Starting Rotation Matrix"<<endl<<current_pose_rot<<endl<<endl;
+    cout<<"Goal Rotation Matrix"<<endl<<goal_pose_rot<<endl<<endl;
+    cout<<"Calculated Rotation Matrix"<<endl<<TO_DESTINATION_ROTATION_MATRIX<<endl<<endl;
+    
+    cout<<"Angle to goal "<<(abs(theta - M_PI))<<endl<<endl;
+    cout<<"W of difference quaternion: "<<diff_quat.w()<<endl<<endl;
+    
+    // Text input stop, uncomment if you want to see initial values and calculations
+    // int temp;
+    // cin >> temp;
 
-    int temp;
-    cin >> temp;
     // Loop variable to check effort limit condition
     bool effort_limit_crossed = false;
     effort_limit_crossed = ((abs(ft_in_robot_frame.torque.x) > TORQUE_THRESHOLD) || (abs(ft_in_robot_frame.torque.y) > TORQUE_THRESHOLD) || (abs(ft_in_robot_frame.torque.z) > TORQUE_THRESHOLD) ||
                                  (abs(ft_in_robot_frame.force.x) > FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.y) > FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.z) > FORCE_THRESHOLD));
 
+    bool within_orientation_target = ( abs(theta - M_PI) < ROTATION_ERROR_THRESHOLD );
 
-    bool within_orientation_target = ((abs(current_pose_rot(0,0) - goal_pose_rot(0,0)) < ROTATION_ERROR_THRESHOLD) && (abs(current_pose_rot(0,1) - goal_pose_rot(0,1)) < ROTATION_ERROR_THRESHOLD) &&
-                                    (abs(current_pose_rot(0,2) - goal_pose_rot(0,2)) < ROTATION_ERROR_THRESHOLD) && (abs(current_pose_rot(1,0) - goal_pose_rot(1,0)) < ROTATION_ERROR_THRESHOLD) && 
-                                    (abs(current_pose_rot(1,1) - goal_pose_rot(1,1)) < ROTATION_ERROR_THRESHOLD) && (abs(current_pose_rot(1,2) - goal_pose_rot(1,2)) < ROTATION_ERROR_THRESHOLD) &&
-                                    (abs(current_pose_rot(2,0) - goal_pose_rot(2,0)) < ROTATION_ERROR_THRESHOLD) && (abs(current_pose_rot(2,1) - goal_pose_rot(2,1)) < ROTATION_ERROR_THRESHOLD) &&
-                                    (abs(current_pose_rot(2,2) - goal_pose_rot(2,2)) < ROTATION_ERROR_THRESHOLD));
     // Begin loop
     /*
     Loop End Conditions:
@@ -241,7 +236,7 @@ int main(int argc, char** argv) {
         current_pose_quat.w() = current_pose.orientation.w;
 
         // Keep the robot pressing down
-        virtual_attractor.pose.position.x = current_pose.position.x + KEEP_CONTACT_DISTANCE;
+        // virtual_attractor.pose.position.x = current_pose.position.x + KEEP_CONTACT_DISTANCE;
 
         // Convert current pose quaternion to Euler Angles TODO check?
         current_pose_rot = current_pose_quat.normalized().toRotationMatrix();
@@ -260,28 +255,24 @@ int main(int argc, char** argv) {
         virtual_attractor_publisher.publish(virtual_attractor);
         naptime.sleep();
 
-        // Print current position
-        current_orientation = joint_states(5);
-        // cout<<"Current orientation: "<<endl<<current_orientation<<endl;
-
-        cout<<"Current Rotation Matrix"<<endl<<current_pose_rot<<endl;
-        cout<<"Target Rotation Matrix"<<endl<<goal_pose_rot<<endl<<endl;
-        // cout<<"Differences for each section:"<<endl;
-        // cout<<(abs(current_pose_rot(0,0) - goal_pose_rot(0,0)))<<","<<(abs(current_pose_rot(0,1) - goal_pose_rot(0,1)))<<","<<(abs(current_pose_rot(0,2) - goal_pose_rot(0,2)))<<endl;
-        // cout<<(abs(current_pose_rot(1,0) - goal_pose_rot(1,0)))<<","<<(abs(current_pose_rot(1,1) - goal_pose_rot(1,1)))<<","<<(abs(current_pose_rot(1,2) - goal_pose_rot(1,2)))<<endl;
-        // cout<<(abs(current_pose_rot(2,0) - goal_pose_rot(2,0)))<<","<<(abs(current_pose_rot(2,1) - goal_pose_rot(2,1)))<<","<<(abs(current_pose_rot(2,2) - goal_pose_rot(2,2)))<<endl<<endl;
-        
 
         // Check if the effort threshold has been crossed once again (check each force and toque if they cross the threshold, if any do, update and set to true)
         effort_limit_crossed = ((abs(ft_in_robot_frame.torque.x) > TORQUE_THRESHOLD) || (abs(ft_in_robot_frame.torque.y) > TORQUE_THRESHOLD) || (abs(ft_in_robot_frame.torque.z) > TORQUE_THRESHOLD) ||
                                  (abs(ft_in_robot_frame.force.x) > FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.y) > FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.z) > FORCE_THRESHOLD));
         
         // Check if we arrived at the target orientation
-        bool within_orientation_target = ((abs(current_pose_rot(0,0) - goal_pose_rot(0,0)) < ROTATION_ERROR_THRESHOLD) && (abs(current_pose_rot(0,1) - goal_pose_rot(0,1)) < ROTATION_ERROR_THRESHOLD) &&
-                                    (abs(current_pose_rot(0,2) - goal_pose_rot(0,2)) < ROTATION_ERROR_THRESHOLD) && (abs(current_pose_rot(1,0) - goal_pose_rot(1,0)) < ROTATION_ERROR_THRESHOLD) && 
-                                    (abs(current_pose_rot(1,1) - goal_pose_rot(1,1)) < ROTATION_ERROR_THRESHOLD) && (abs(current_pose_rot(1,2) - goal_pose_rot(1,2)) < ROTATION_ERROR_THRESHOLD) &&
-                                    (abs(current_pose_rot(2,0) - goal_pose_rot(2,0)) < ROTATION_ERROR_THRESHOLD) && (abs(current_pose_rot(2,1) - goal_pose_rot(2,1)) < ROTATION_ERROR_THRESHOLD) &&
-                                    (abs(current_pose_rot(2,2) - goal_pose_rot(2,2)) < ROTATION_ERROR_THRESHOLD));
+        diff_quat = goal_pose_quat * current_pose_quat.inverse();
+        theta = 2 * asin(diff_quat.w());
+
+        within_orientation_target = ( abs(theta - M_PI) < ROTATION_ERROR_THRESHOLD );
+
+        // Print current position
+        cout<<"Current Rotation Matrix"<<endl<<current_pose_rot<<endl;
+        cout<<"Target Rotation Matrix"<<endl<<goal_pose_rot<<endl<<endl;
+        cout<<"Angle to goal "<<(abs(theta - M_PI))<<endl<<endl;
+        cout<<"W of difference quaternion: "<<diff_quat.w()<<endl<<endl;
+
+
         // Increase counter
         loops_so_far = loops_so_far + 1;
     }
@@ -331,7 +322,7 @@ int main(int argc, char** argv) {
         current_pose_quat.w() = current_pose.orientation.w;
 
         // Keep the robot pressing down
-        virtual_attractor.pose.position.x = current_pose.position.x + KEEP_CONTACT_DISTANCE;
+        // virtual_attractor.pose.position.x = current_pose.position.x + KEEP_CONTACT_DISTANCE;
 
         // Convert current pose quaternion to Euler Angles TODO check?
         Eigen::Matrix3d current_pose_rot = current_pose_quat.normalized().toRotationMatrix();
@@ -347,11 +338,11 @@ int main(int argc, char** argv) {
         ROT_MAT_CONTACT(0,1) = 0;
         ROT_MAT_CONTACT(0,2) = 0;
         ROT_MAT_CONTACT(1,0) = 0;
-        ROT_MAT_CONTACT(1,1) = cos(ROTATE_ANGLE);
-        ROT_MAT_CONTACT(1,2) = -sin(ROTATE_ANGLE);
+        ROT_MAT_CONTACT(1,1) = cos(KEEP_CONTACT_ANGLE);
+        ROT_MAT_CONTACT(1,2) = -sin(KEEP_CONTACT_ANGLE);
         ROT_MAT_CONTACT(2,0) = 0;
-        ROT_MAT_CONTACT(2,1) = sin(ROTATE_ANGLE);
-        ROT_MAT_CONTACT(2,2) = cos(ROTATE_ANGLE);
+        ROT_MAT_CONTACT(2,1) = sin(KEEP_CONTACT_ANGLE);
+        ROT_MAT_CONTACT(2,2) = cos(KEEP_CONTACT_ANGLE);
 
         // Do rotation
         Eigen::Matrix3d new_virtual_attractor_rot = current_pose_rot * ROT_MAT_CONTACT;
@@ -376,7 +367,7 @@ int main(int argc, char** argv) {
         virtual_attractor.pose = current_pose;
 
         // Keep the robot pressing down
-        virtual_attractor.pose.position.x = current_pose.position.x + KEEP_CONTACT_DISTANCE;
+        // virtual_attractor.pose.position.x = current_pose.position.x + KEEP_CONTACT_DISTANCE;
     }
 
     //If we've timed out

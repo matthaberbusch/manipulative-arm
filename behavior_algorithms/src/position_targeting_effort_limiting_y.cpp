@@ -147,12 +147,12 @@ int main(int argc, char** argv) {
     }
     else if (!strcmp(param_set.c_str(), "Cutting")){
         // set the other values here
-        PULL_DISTANCE = 0.005;
-        FORCE_THRESHOLD = 2.5;
-        NONDIRECTIONAL_FORCE_THRESHOLD = 5;
+        PULL_DISTANCE = 0.006;
+        FORCE_THRESHOLD = 4;
+        NONDIRECTIONAL_FORCE_THRESHOLD = 7;
         TORQUE_THRESHOLD = 2;
         KEEP_CONTACT_DISTANCE = 0;
-        KEEP_CUTTING_DISTANCE = 0.001;
+        KEEP_CUTTING_DISTANCE = 0.00075; // was 0.001
         RUN_TIME = 30;
 
         cutting = true;
@@ -216,10 +216,10 @@ int main(int argc, char** argv) {
     bool target_reached;
 
     if(TARGET_DISTANCE < 0){
-        target_reached = dot_product > 0;
+        target_reached = dot_product >= 0;
     }
     else {
-        target_reached = dot_product < 0;
+        target_reached = dot_product <= 0;
     }
 
     // Debug output
@@ -242,6 +242,7 @@ int main(int argc, char** argv) {
     2. One of the effort thresholds has been crossed
     3. The target orientation has been reached
     */
+    
     while( (loops_so_far <= total_number_of_loops) && !effort_limit_crossed && !target_reached) {
         // ROS: for communication between programs
         ros::spinOnce();
@@ -255,13 +256,15 @@ int main(int argc, char** argv) {
             // Move in the task frame if cutting, else use tool frame
             if(cutting){
                 virtual_attractor.pose.position.x = current_pose.position.x + task_vector_y.x * PULL_DISTANCE + task_vector_z.x * KEEP_CUTTING_DISTANCE;
-                virtual_attractor.pose.position.y = current_pose.position.y + task_vector_y.y * PULL_DISTANCE + task_vector_z.x * KEEP_CUTTING_DISTANCE;
-                virtual_attractor.pose.position.z = current_pose.position.z + task_vector_y.z * PULL_DISTANCE + task_vector_z.x * KEEP_CUTTING_DISTANCE;
+                virtual_attractor.pose.position.y = current_pose.position.y + task_vector_y.y * PULL_DISTANCE + task_vector_z.y * KEEP_CUTTING_DISTANCE;
+                virtual_attractor.pose.position.z = current_pose.position.z + task_vector_y.z * PULL_DISTANCE + task_vector_z.z * KEEP_CUTTING_DISTANCE;
+                cout<<"CUTTING"<<endl;
             }
             else{
                 virtual_attractor.pose.position.x = current_pose.position.x + tool_vector_y.x * PULL_DISTANCE;
                 virtual_attractor.pose.position.y = current_pose.position.y + tool_vector_y.y * PULL_DISTANCE;
                 virtual_attractor.pose.position.z = current_pose.position.z + tool_vector_y.z * PULL_DISTANCE;
+                cout<<"not CUTTING"<<endl;
             }
         }
         else {
@@ -269,12 +272,14 @@ int main(int argc, char** argv) {
             // Move in the task frame if cutting, else move in tool frame 
             if(cutting){
                 virtual_attractor.pose.position.x = current_pose.position.x - task_vector_y.x * PULL_DISTANCE + task_vector_z.x * KEEP_CUTTING_DISTANCE;
-                virtual_attractor.pose.position.y = current_pose.position.y - task_vector_y.y * PULL_DISTANCE + task_vector_z.x * KEEP_CUTTING_DISTANCE;
-                virtual_attractor.pose.position.z = current_pose.position.z - task_vector_y.z * PULL_DISTANCE + task_vector_z.x * KEEP_CUTTING_DISTANCE;
+                virtual_attractor.pose.position.y = current_pose.position.y - task_vector_y.y * PULL_DISTANCE + task_vector_z.y * KEEP_CUTTING_DISTANCE;
+                virtual_attractor.pose.position.z = current_pose.position.z - task_vector_y.z * PULL_DISTANCE + task_vector_z.z * KEEP_CUTTING_DISTANCE;
+                cout<<"CUTTING"<<endl;
             }else{
                 virtual_attractor.pose.position.x = current_pose.position.x - tool_vector_y.x * PULL_DISTANCE;
                 virtual_attractor.pose.position.y = current_pose.position.y - tool_vector_y.y * PULL_DISTANCE;
                 virtual_attractor.pose.position.z = current_pose.position.z - tool_vector_y.z * PULL_DISTANCE;
+                cout<<"not CUTTING"<<endl;
             }
         }
         
@@ -287,10 +292,10 @@ int main(int argc, char** argv) {
         
         // If it is past the plane perpendicular to the direction of movement at the goal position, then we have reached the target 
         if(TARGET_DISTANCE < 0){
-            target_reached = dot_product > 0;
+            target_reached = dot_product >= 0;
         }
         else {
-            target_reached = dot_product < 0;
+            target_reached = dot_product <= 0;
         }
 
         // Update the values for the loop condition
