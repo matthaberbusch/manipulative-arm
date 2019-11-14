@@ -4,6 +4,10 @@ Multiple "behaviors" of the arm are being developed, for example, move until tou
 Simultaneously, different control algorithms for achieving compliance are being tested, currently under accommodation control
 
 ## Nodes to run:
+`roscore`
+
+`rosrun robotiq_ft_sensor rq_sensor`
+
 `rosrun irb120_accommodation_control custom_egm_test`
 
 `rosrun irb120_accommodation_control accommodation_controller`
