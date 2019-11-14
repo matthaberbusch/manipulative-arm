@@ -24,7 +24,8 @@ using namespace std;
 geometry_msgs::Pose current_pose;
 geometry_msgs::PoseStamped virtual_attractor;
 geometry_msgs::Wrench ft_in_robot_frame;
-Eigen::VectorXd joint_states = Eigen::VectorXd::Zero(6);
+
+geometry_msgs::PoseStamped task_frame;
 
 // ROS: callback functions for how we receive data
 void cartesian_state_callback(const geometry_msgs::PoseStamped& cartesian_pose) {
@@ -34,10 +35,8 @@ void ft_callback(const geometry_msgs::Wrench& ft_values) {
     // These are not values from the sensor. They are f/t values transformed into robot base frame.
     ft_in_robot_frame = ft_values;
 }
-void jointStateCallback(const sensor_msgs::JointState& joint_state) {
-    // ROS: Get joint states from robot
-    for(int i = 0; i < 6; i++) joint_states(i) = joint_state.position[i] ;
-
+void task_frame_callback(const geometry_msgs::PoseStamped& task_frame_from_sub) {
+    task_frame = task_frame_from_sub;
 }
 
 // ROS: main program
@@ -49,7 +48,7 @@ int main(int argc, char** argv) {
     // ROS: Define subscribers and publishers used
     ros::Subscriber cartesian_state_subscriber = nh.subscribe("cartesian_logger",1, cartesian_state_callback); // subscribe to the topic publishing the cartesian state of the end effector
     ros::Subscriber ft_subscriber = nh.subscribe("transformed_ft_wrench",1,ft_callback);                       // subscribe to the force/torque sensor data
-    ros::Subscriber joint_state_sub = nh.subscribe("abb120_joint_state",1,jointStateCallback);                 // subscribe to the state of joints to get the orientation of the end effector for rotation
+    ros::Subscriber task_frame_sub = nh.subscribe("task_frame",1,task_frame_callback);                         // subscribe to the task frame published by the accomodation controller
     ros::Publisher virtual_attractor_publisher = nh.advertise<geometry_msgs::PoseStamped>("Virt_attr_pose",1); // publish the pose of the virtual attractor for the accomodation controller 
 
     // ROS: Services used in conjunction with buffer.cpp to have delayed program status sent to operator
@@ -79,11 +78,16 @@ int main(int argc, char** argv) {
     double total_number_of_loops = RUN_TIME / DT;
     double loops_so_far = 0;
 
+    bool cutting = false;
+
     // Variable for which set of parameters to use
     string param_set = "Peg";
 
     // MATH: Define current pose quaternion
     Eigen::Quaterniond current_pose_quat;
+
+    // MATH: Define the task frame pose orientation quaterinion 
+    Eigen::Quaterniond task_frame_quat;
 
     // ROS: for loop rate
     ros::Rate naptime(1/DT);
@@ -108,16 +112,19 @@ int main(int argc, char** argv) {
     if(!strcmp(param_set.c_str(), "Peg")){
         // set the new values here
         KEEP_CONTACT_DISTANCE = 0.015;
+        cutting = false;
         ROS_INFO("Params set for PEG");
     }
     else if (!strcmp(param_set.c_str(), "Bottle_Cap")){
         // set the other values here
         KEEP_CONTACT_DISTANCE = 0.015;
+        cutting = false;
         ROS_INFO("Params set for BOTTLE_CAP");
     }
     else if (!strcmp(param_set.c_str(), "Cutting")){
         // set the other values here
         KEEP_CONTACT_DISTANCE = 0;
+        cutting = true;
         ROS_INFO("Params set for CUTTING");
     } 
 
@@ -145,7 +152,7 @@ int main(int argc, char** argv) {
     srv.request.status = "Unkown";
 
     // ROS: Wait until we have position data. Our default position is 0.
-    while(current_pose.position.x == 0) ros::spinOnce();
+    while(current_pose.position.x == 0 || task_frame.pose.position.x == 0) ros::spinOnce();
 
     // Get starting position and turn it into a quaternion
     virtual_attractor.pose = current_pose;
@@ -153,8 +160,18 @@ int main(int argc, char** argv) {
     current_pose_quat.y() = current_pose.orientation.y;
     current_pose_quat.z() = current_pose.orientation.z;
     current_pose_quat.w() = current_pose.orientation.w;
+
+    // Convert the geometry quaternion to a quaternion
+    task_frame_quat.x() = task_frame.pose.orientation.x;
+    task_frame_quat.y() = task_frame.pose.orientation.y;
+    task_frame_quat.z() = task_frame.pose.orientation.z;
+    task_frame_quat.w() = task_frame.pose.orientation.w;
     
+    // Convert the quaternions to rotation matrices
     Eigen::Matrix3d current_pose_rot = current_pose_quat.normalized().toRotationMatrix();
+
+    // Task frame will not update during a skill (if using the GUI to interact, if using other commands outside of gui, other issues may arise)
+    Eigen::Matrix3d task_frame_rot = task_frame_quat.normalized().toRotationMatrix();
 
     if (TARGET_ORIENTATION < 0){
         ROTATE_ANGLE = -ROTATE_ANGLE;
@@ -186,10 +203,24 @@ int main(int argc, char** argv) {
     ROT_MAT_MOVE(2,2) = 1;
 
     // Goal Rotation Matrix
-    Eigen::Matrix3d goal_pose_rot = current_pose_rot * TO_DESTINATION_ROTATION_MATRIX;
+    Eigen::Matrix3d goal_pose_rot_wrt_robot;
+
+    // MATH: Get rotation matrix from the task frame to the current pose
+    Eigen::Matrix3d tool_in_task = task_frame_rot.inverse() * current_pose_rot;
+
+    // If we are cutting, change the rotation matrix to the goal
+    if(cutting){
+        // Calculate the new goal rotation matrix
+        Eigen::Matrix3d goal_pose_wrt_task = tool_in_task * TO_DESTINATION_ROTATION_MATRIX; // task_frame_rot * TO_DESTINATION_ROTATION_MATRIX; // tool_in_task * TO_DESTINATION_ROTATION_MATRIX
+        goal_pose_rot_wrt_robot = task_frame_rot * goal_pose_wrt_task; // tool_in_task * goal_pose_rot_wrt_robot;
+        // goal_pose_rot_wrt_robot = goal_pose_wrt_task; // BAD BAD BAD BAD
+    }
+    else{
+        goal_pose_rot_wrt_robot = current_pose_rot * TO_DESTINATION_ROTATION_MATRIX;
+    }
     
     // Calculate the angle between the two orientatnions using quaternions
-    Eigen::Quaterniond goal_pose_quat(goal_pose_rot);
+    Eigen::Quaterniond goal_pose_quat(goal_pose_rot_wrt_robot);
     Eigen::Quaterniond diff_quat;
 
     diff_quat = current_pose_quat * goal_pose_quat.inverse();
@@ -197,15 +228,15 @@ int main(int argc, char** argv) {
 
     // Print starting and target positions
     cout<<"Starting Rotation Matrix"<<endl<<current_pose_rot<<endl<<endl;
-    cout<<"Goal Rotation Matrix"<<endl<<goal_pose_rot<<endl<<endl;
+    cout<<"Goal Rotation Matrix"<<endl<<goal_pose_rot_wrt_robot<<endl<<endl;
     cout<<"Calculated Rotation Matrix"<<endl<<TO_DESTINATION_ROTATION_MATRIX<<endl<<endl;
     
     cout<<"Angle to goal "<<(abs(theta - M_PI))<<endl<<endl;
     cout<<"W of difference quaternion: "<<diff_quat.w()<<endl<<endl;
     
     // Text input stop, uncomment if you want to see initial values and calculations
-    // int temp;
-    // cin >> temp;
+    int temp;
+    cin >> temp;
 
     // Loop variable to check effort limit condition
     bool effort_limit_crossed = false;
@@ -220,6 +251,10 @@ int main(int argc, char** argv) {
     2. One of the effort thresholds has been crossed
     3. The target orientation has been reached
     */
+    
+    // // Skip the loop 
+    // within_orientation_target = true;
+
     while( (loops_so_far <= total_number_of_loops) && !effort_limit_crossed && !within_orientation_target) { 
 
         // ROS: for communication between programs
@@ -238,13 +273,32 @@ int main(int argc, char** argv) {
         current_pose_rot = current_pose_quat.normalized().toRotationMatrix();
 
         // Do rotation
-        Eigen::Matrix3d new_virtual_attractor_rot = current_pose_rot * ROT_MAT_MOVE;
+        Eigen::Matrix3d new_virtual_attractor_rot_wrt_task;
+        Eigen::Matrix3d new_virtual_attractor_rot_wrt_robot;
+        // If we are cutting, change the rotation matrix to the goal
+        if(cutting){
+            // Calculate the new goal rotation matrix
 
+            // Do we need to update this????
+            tool_in_task = task_frame_rot.inverse() * current_pose_rot; // current_pose_rot.inverse() * task_frame_rot;
+            
+            // Older method
+            // new_virtual_attractor_rot_wrt_robot = task_frame_rot * ROT_MAT_MOVE;
+            // new_virtual_attractor_rot_wrt_robot = tool_in_task * new_virtual_attractor_rot_wrt_robot;
+
+            new_virtual_attractor_rot_wrt_task = tool_in_task * ROT_MAT_MOVE;
+            // Then rotate the task frame back to the robot frame?????? to have the virt att in robot frame
+            new_virtual_attractor_rot_wrt_robot = task_frame_rot * new_virtual_attractor_rot_wrt_task;
+            // new_virtual_attractor_rot_wrt_robot = new_virtual_attractor_rot_wrt_task; // BAD BAD BAD BAD
+        }
+        else{
+            new_virtual_attractor_rot_wrt_robot = current_pose_rot * ROT_MAT_MOVE;
+        }
         // Task fram rot? 
-        // new_virtual_attractor_rot = task_rot_mat * ROT_MAT_MOVE * current_pose_rot
+        // new_virtual_attractor_rot_wrt_robot = task_rot_mat * ROT_MAT_MOVE * current_pose_rot
                     
         // Convert new orientation to quaternion
-        Eigen::Quaterniond new_virtual_attractor_quat(new_virtual_attractor_rot);
+        Eigen::Quaterniond new_virtual_attractor_quat(new_virtual_attractor_rot_wrt_robot);
         virtual_attractor.pose.orientation.x = new_virtual_attractor_quat.x();
         virtual_attractor.pose.orientation.y = new_virtual_attractor_quat.y();
         virtual_attractor.pose.orientation.z = new_virtual_attractor_quat.z();
@@ -266,14 +320,19 @@ int main(int argc, char** argv) {
 
         // Print current position
         cout<<"Current Rotation Matrix"<<endl<<current_pose_rot<<endl;
-        cout<<"Target Rotation Matrix"<<endl<<goal_pose_rot<<endl<<endl;
+        cout<<"Goal Rotation Matrix"<<endl<<goal_pose_rot_wrt_robot<<endl<<endl;
+        cout<<"Virt Attr Rotation Matrix"<<endl<<new_virtual_attractor_rot_wrt_robot<<endl<<endl;
         cout<<"Angle to goal "<<(abs(theta - M_PI))<<endl<<endl;
         cout<<"W of difference quaternion: "<<diff_quat.w()<<endl<<endl;
 
+        // DELETE THIS 
+        // within_orientation_target = true;
+        cin >> temp;
 
         // Increase counter
         loops_so_far = loops_so_far + 1;
     }
+
     
     // If we've crossed the effort limits, check which is crossed for the status output
     if(effort_limit_crossed) {
@@ -343,10 +402,10 @@ int main(int argc, char** argv) {
         ROT_MAT_CONTACT(2,2) = 1;
 
         // Do rotation
-        Eigen::Matrix3d new_virtual_attractor_rot = current_pose_rot * ROT_MAT_CONTACT;
+        Eigen::Matrix3d new_virtual_attractor_rot_wrt_robot = current_pose_rot * ROT_MAT_CONTACT;
                     
         // Convert new orientation to quaternion
-        Eigen::Quaterniond new_virtual_attractor_quat(new_virtual_attractor_rot);
+        Eigen::Quaterniond new_virtual_attractor_quat(new_virtual_attractor_rot_wrt_robot);
         virtual_attractor.pose.orientation.x = new_virtual_attractor_quat.x();
         virtual_attractor.pose.orientation.y = new_virtual_attractor_quat.y();
         virtual_attractor.pose.orientation.z = new_virtual_attractor_quat.z();

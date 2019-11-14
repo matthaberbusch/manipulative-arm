@@ -1,1 +1,5 @@
-Look into angular jacobian wrt axis-angle representation of robot orientation
+Update README
+Clean up old files
+Update OTEL to work in task frame
+Add new method to determine task frame
+Create GUI for cutting planning

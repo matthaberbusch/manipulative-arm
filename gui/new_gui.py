@@ -13,6 +13,7 @@ delay_len = 0
 
 # List of options for preset values, to be associated with related values in each function
 options = ['Peg', 'Bottle_Cap', 'Cutting']
+selected_option = 2 
 
 class Application(tk.Frame):
 
@@ -75,7 +76,7 @@ class Application(tk.Frame):
 
         # This variable stores the value of the set of parameters needed, will send it to the ptfl
         self.parameter_set = tk.StringVar(self)
-        self.parameter_set.set(options[2])
+        self.parameter_set.set(options[selected_option]) # Change the number in the brackets for which one 
 
         # Comented out is if I want to link a function to the update of the menu
         self.drop = tk.OptionMenu(self, self.parameter_set, *options) #, font='Courier 20 bold') # command=self.updated_menu, 
