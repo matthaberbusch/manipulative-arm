@@ -73,7 +73,7 @@ int main(int argc, char** argv) {
     TARGET_ORIENTATION: will change with user input, how far and in what direction the end effector moves
     *///                                                                      was  0.1
     double DT = 0.01, TORQUE_THRESHOLD = 0.4, FORCE_THRESHOLD = 15, ROTATE_ANGLE = 0.15, KEEP_CONTACT_ANGLE = 0.1, TARGET_ORIENTATION = 0.05; // Do not increase the virtual attractor angle greater than 1.55 radians
-    double KEEP_CONTACT_DISTANCE = 0.015, ROTATION_ERROR_THRESHOLD = 0.02;
+    double KEEP_CONTACT_DISTANCE = 0.015, ROTATION_ERROR_THRESHOLD = 0.03; // 0.045; using .isApprox() it was stopping at 0.09         // was 0.02, then did not stop when it hit 0.0399
     double RUN_TIME = 60;
     double total_number_of_loops = RUN_TIME / DT;
     double loops_so_far = 0;
@@ -121,12 +121,24 @@ int main(int argc, char** argv) {
         cutting = false;
         ROS_INFO("Params set for BOTTLE_CAP");
     }
+    else if (!strcmp(param_set.c_str(), "Tool")){
+        // set the other values here
+        KEEP_CONTACT_DISTANCE = 0; 
+        cutting = false;
+        ROS_INFO("Params set for TOOL");
+    }
     else if (!strcmp(param_set.c_str(), "Cutting")){
         // set the other values here
         KEEP_CONTACT_DISTANCE = 0;
         cutting = true;
         ROS_INFO("Params set for CUTTING");
-    } 
+    }
+    else if (!strcmp(param_set.c_str(), "Task")){
+        // set the other values here
+        KEEP_CONTACT_DISTANCE = 0;
+        cutting = true; //  CHANGE? ???  separate variable just for tool frame
+        ROS_INFO("Params set for TASK");
+    }
 
 
     // Output what is received 
@@ -207,12 +219,14 @@ int main(int argc, char** argv) {
 
     // MATH: Get rotation matrix from the task frame to the current pose
     Eigen::Matrix3d tool_in_task = task_frame_rot.inverse() * current_pose_rot;
+    Eigen::Matrix3d goal_pose_wrt_task;
 
     // If we are cutting, change the rotation matrix to the goal
     if(cutting){
         // Calculate the new goal rotation matrix
-        Eigen::Matrix3d goal_pose_wrt_task = tool_in_task * TO_DESTINATION_ROTATION_MATRIX; // task_frame_rot * TO_DESTINATION_ROTATION_MATRIX; // tool_in_task * TO_DESTINATION_ROTATION_MATRIX
+        goal_pose_wrt_task = TO_DESTINATION_ROTATION_MATRIX * tool_in_task;// tool_in_task * TO_DESTINATION_ROTATION_MATRIX; // task_frame_rot * TO_DESTINATION_ROTATION_MATRIX;
         goal_pose_rot_wrt_robot = task_frame_rot * goal_pose_wrt_task; // tool_in_task * goal_pose_rot_wrt_robot;
+
         // goal_pose_rot_wrt_robot = goal_pose_wrt_task; // BAD BAD BAD BAD
     }
     else{
@@ -224,11 +238,14 @@ int main(int argc, char** argv) {
     Eigen::Quaterniond diff_quat;
 
     diff_quat = current_pose_quat * goal_pose_quat.inverse();
-    double theta = 2 * asin(abs(diff_quat.w()));
+    
+    // Change to make sure this is accurate, based on w vazlue being negative or positive
+    double theta = 2 * asin(abs(diff_quat.w())); // abs remoced from diff_quat.w() 
 
     // Print starting and target positions
     cout<<"Starting Rotation Matrix"<<endl<<current_pose_rot<<endl<<endl;
     cout<<"Goal Rotation Matrix"<<endl<<goal_pose_rot_wrt_robot<<endl<<endl;
+    cout<<"Goal Pose wrt task frame (z rot)"<<endl<<goal_pose_wrt_task<<endl<<endl;
     cout<<"Calculated Rotation Matrix"<<endl<<TO_DESTINATION_ROTATION_MATRIX<<endl<<endl;
     
     cout<<"Angle to goal "<<(abs(theta - M_PI))<<endl<<endl;
@@ -236,14 +253,17 @@ int main(int argc, char** argv) {
     
     // Text input stop, uncomment if you want to see initial values and calculations
     int temp;
-    cin >> temp;
+    // cin >> temp;
 
     // Loop variable to check effort limit condition
     bool effort_limit_crossed = false;
     effort_limit_crossed = ((abs(ft_in_robot_frame.torque.x) > TORQUE_THRESHOLD) || (abs(ft_in_robot_frame.torque.y) > TORQUE_THRESHOLD) || (abs(ft_in_robot_frame.torque.z) > TORQUE_THRESHOLD) ||
                                  (abs(ft_in_robot_frame.force.x) > FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.y) > FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.z) > FORCE_THRESHOLD));
 
-    bool within_orientation_target = ( abs(theta - M_PI) < ROTATION_ERROR_THRESHOLD );
+    // bool within_orientation_target = ( abs(theta - M_PI) < ROTATION_ERROR_THRESHOLD );
+
+    // New method for approx?
+    bool within_orientation_target = current_pose_quat.isApprox(goal_pose_quat, ROTATION_ERROR_THRESHOLD);
     // Begin loop
     /*
     Loop End Conditions:
@@ -286,7 +306,7 @@ int main(int argc, char** argv) {
             // new_virtual_attractor_rot_wrt_robot = task_frame_rot * ROT_MAT_MOVE;
             // new_virtual_attractor_rot_wrt_robot = tool_in_task * new_virtual_attractor_rot_wrt_robot;
 
-            new_virtual_attractor_rot_wrt_task = tool_in_task * ROT_MAT_MOVE;
+            new_virtual_attractor_rot_wrt_task = ROT_MAT_MOVE * tool_in_task; // tool_in_task * ROT_MAT_MOVE;
             // Then rotate the task frame back to the robot frame?????? to have the virt att in robot frame
             new_virtual_attractor_rot_wrt_robot = task_frame_rot * new_virtual_attractor_rot_wrt_task;
             // new_virtual_attractor_rot_wrt_robot = new_virtual_attractor_rot_wrt_task; // BAD BAD BAD BAD
@@ -314,25 +334,30 @@ int main(int argc, char** argv) {
         
         // Check if we arrived at the target orientation
         diff_quat = goal_pose_quat * current_pose_quat.inverse();
-        theta = 2 * asin(diff_quat.w());
+        theta = 2 * asin(abs(diff_quat.w()));
 
-        within_orientation_target = ( abs(theta - M_PI) < ROTATION_ERROR_THRESHOLD );
+        // within_orientation_target = ( abs(theta - M_PI) < ROTATION_ERROR_THRESHOLD );
+        
+        // New method? 
+        within_orientation_target = current_pose_quat.isApprox(goal_pose_quat, ROTATION_ERROR_THRESHOLD);
 
         // Print current position
-        cout<<"Current Rotation Matrix"<<endl<<current_pose_rot<<endl;
-        cout<<"Goal Rotation Matrix"<<endl<<goal_pose_rot_wrt_robot<<endl<<endl;
-        cout<<"Virt Attr Rotation Matrix"<<endl<<new_virtual_attractor_rot_wrt_robot<<endl<<endl;
-        cout<<"Angle to goal "<<(abs(theta - M_PI))<<endl<<endl;
+        // cout<<"Current Rotation Matrix"<<endl<<current_pose_rot<<endl;
+        // cout<<"Goal Rotation Matrix"<<endl<<goal_pose_rot_wrt_robot<<endl<<endl;
+        // cout<<"Virt Attr Rotation Matrix"<<endl<<new_virtual_attractor_rot_wrt_robot<<endl<<endl;
+        cout<<"Angle to goal "<<(abs(theta - M_PI))<<endl; //<<endl;
         cout<<"W of difference quaternion: "<<diff_quat.w()<<endl<<endl;
 
         // DELETE THIS 
         // within_orientation_target = true;
-        cin >> temp;
+        // cin >> temp;
 
         // Increase counter
         loops_so_far = loops_so_far + 1;
     }
 
+    cout<<"Stopping Rotation Matrix"<<endl<<current_pose_rot<<endl<<endl;
+    cout<<"Goal Rotation Matrix"<<endl<<goal_pose_rot_wrt_robot<<endl<<endl;
     
     // If we've crossed the effort limits, check which is crossed for the status output
     if(effort_limit_crossed) {

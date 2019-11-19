@@ -74,7 +74,7 @@ int main(int argc, char** argv) {
     TARGET_ORIENTATION: will change with user input, how far and in what direction the end effector moves
     *///                                                                      was  0.1
     double DT = 0.01, TORQUE_THRESHOLD = 0.4, FORCE_THRESHOLD = 15, ROTATE_ANGLE = 0.05, KEEP_CONTACT_ANGLE = 0.1, TARGET_ORIENTATION = 0.05; // Do not increase the virtual attractor angle greater than 1.55 radians
-    double KEEP_CONTACT_DISTANCE = 0.015, ROTATION_ERROR_THRESHOLD = 0.02; //0.05;
+    double KEEP_CONTACT_DISTANCE = 0.015, ROTATION_ERROR_THRESHOLD = 0.03; //0.05;
     double RUN_TIME = 75;
     double total_number_of_loops = RUN_TIME / DT;
     double loops_so_far = 0;
@@ -117,10 +117,20 @@ int main(int argc, char** argv) {
         KEEP_CONTACT_DISTANCE = 0.015;
         ROS_INFO("Params set for BOTTLE_CAP");
     }
+    else if (!strcmp(param_set.c_str(), "Tool")){
+        // set the other values here
+        KEEP_CONTACT_DISTANCE = 0;
+        ROS_INFO("Params set for TOOL");
+    }
     else if (!strcmp(param_set.c_str(), "Cutting")){
         // set the other values here
         KEEP_CONTACT_DISTANCE = 0;
         ROS_INFO("Params set for CUTTING");
+    }
+    else if (!strcmp(param_set.c_str(), "Task")){
+        // set the other values here
+        KEEP_CONTACT_DISTANCE = 0;
+        ROS_INFO("Params set for TASK");
     }
     // Output what is received 
     ROS_INFO("Output from parameter for target_orientation; %f", TARGET_ORIENTATION);
@@ -215,7 +225,8 @@ int main(int argc, char** argv) {
     effort_limit_crossed = ((abs(ft_in_robot_frame.torque.x) > TORQUE_THRESHOLD) || (abs(ft_in_robot_frame.torque.y) > TORQUE_THRESHOLD) || (abs(ft_in_robot_frame.torque.z) > TORQUE_THRESHOLD) ||
                                  (abs(ft_in_robot_frame.force.x) > FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.y) > FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.z) > FORCE_THRESHOLD));
 
-    bool within_orientation_target = ( abs(theta - M_PI) < ROTATION_ERROR_THRESHOLD );
+    // bool within_orientation_target = ( abs(theta - M_PI) < ROTATION_ERROR_THRESHOLD );
+    bool within_orientation_target = current_pose_quat.isApprox(goal_pose_quat, ROTATION_ERROR_THRESHOLD);
 
     // Begin loop
     /*
@@ -262,9 +273,10 @@ int main(int argc, char** argv) {
         
         // Check if we arrived at the target orientation
         diff_quat = goal_pose_quat * current_pose_quat.inverse();
-        theta = 2 * asin(diff_quat.w());
+        theta = 2 * asin(abs(diff_quat.w()));
 
-        within_orientation_target = ( abs(theta - M_PI) < ROTATION_ERROR_THRESHOLD );
+        // within_orientation_target = ( abs(theta - M_PI) < ROTATION_ERROR_THRESHOLD );
+        within_orientation_target = current_pose_quat.isApprox(goal_pose_quat, ROTATION_ERROR_THRESHOLD);
 
         // Print current position
         cout<<"Current Rotation Matrix"<<endl<<current_pose_rot<<endl;

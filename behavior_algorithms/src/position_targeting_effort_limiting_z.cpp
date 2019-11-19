@@ -133,6 +133,19 @@ int main(int argc, char** argv) {
         cutting = false;
         ROS_INFO("Params set for BOTTLE_CAP");
     }
+    else if (!strcmp(param_set.c_str(), "Tool")){
+        // set the other values here
+        PULL_DISTANCE = 0.015;
+        FORCE_THRESHOLD = 15;
+        NONDIRECTIONAL_FORCE_THRESHOLD = 20;
+        TORQUE_THRESHOLD = 2;
+        KEEP_CONTACT_DISTANCE = 0;
+        KEEP_CUTTING_DISTANCE = 0;
+        RUN_TIME = 15;
+
+        cutting = false;
+        ROS_INFO("Params set for TOOL");
+    }
     else if (!strcmp(param_set.c_str(), "Cutting")){
         // set the other values here
         PULL_DISTANCE = 0.006;
@@ -145,6 +158,19 @@ int main(int argc, char** argv) {
 
         cutting = true;
         ROS_INFO("Params set for CUTTING");
+    }
+    else if (!strcmp(param_set.c_str(), "Task")){
+        // set the other values here
+        PULL_DISTANCE = 0.006;
+        FORCE_THRESHOLD = 4;
+        NONDIRECTIONAL_FORCE_THRESHOLD = 7;
+        TORQUE_THRESHOLD = 2;
+        KEEP_CONTACT_DISTANCE = 0;
+        KEEP_CUTTING_DISTANCE = 0; 
+        RUN_TIME = 90;
+
+        cutting = true;
+        ROS_INFO("Params set for TASK");
     }
 
     ROS_INFO("Output from parameter for target_distance; %f", TARGET_DISTANCE); 

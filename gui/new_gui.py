@@ -12,7 +12,7 @@ import time
 delay_len = 0
 
 # List of options for preset values, to be associated with related values in each function
-options = ['Peg', 'Bottle_Cap', 'Cutting']
+options = ['Peg', 'Bottle_Cap', 'Cutting', 'Tool', 'Task']
 selected_option = 2 
 
 class Application(tk.Frame):

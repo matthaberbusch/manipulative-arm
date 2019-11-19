@@ -349,7 +349,7 @@ int main(int argc, char **argv) {
 	Eigen::Affine3d tool_with_repsect_to_sensor;
 	Eigen::Matrix3d tool_with_repsect_to_sensor_rotation = Eigen::Matrix3d::Identity();
 	Eigen::Vector3d tool_with_repsect_to_sensor_translation;
-	tool_with_repsect_to_sensor_translation<<0,0,0.1; // 0,0,0.1 is with cyllinder, 0.24 with pencil
+	tool_with_repsect_to_sensor_translation<<0,0,0.22; // 0,0,0.1 is with cyllinder, 0.24 -> 0.23 with pencil
 	tool_with_repsect_to_sensor.linear() = tool_with_repsect_to_sensor_rotation;
 	tool_with_repsect_to_sensor.translation() = tool_with_repsect_to_sensor_translation;
 	
