@@ -148,13 +148,13 @@ int main(int argc, char** argv) {
     }
     else if (!strcmp(param_set.c_str(), "Cutting")){
         // set the other values here
-        PULL_DISTANCE = 0.006;
+        PULL_DISTANCE = 0.005;
         FORCE_THRESHOLD = 4;
         NONDIRECTIONAL_FORCE_THRESHOLD = 7;
         TORQUE_THRESHOLD = 2;
         KEEP_CONTACT_DISTANCE = 0;
         KEEP_CUTTING_DISTANCE = 0.00075; // was 0.001
-        RUN_TIME = 90;
+        RUN_TIME = 30;
 
         cutting = true;
         ROS_INFO("Params set for CUTTING");
@@ -167,7 +167,7 @@ int main(int argc, char** argv) {
         TORQUE_THRESHOLD = 2;
         KEEP_CONTACT_DISTANCE = 0;
         KEEP_CUTTING_DISTANCE = 0; 
-        RUN_TIME = 90;
+        RUN_TIME = 30;
 
         cutting = true;
         ROS_INFO("Params set for TASK");

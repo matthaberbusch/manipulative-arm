@@ -94,10 +94,6 @@ int main(int argc, char** argv) {
     // Parameter for if in the cutting state, easier checking later
     bool cutting = false;
 
-    // Used in the loop to determine the run time and time out
-    double total_number_of_loops = RUN_TIME / DT;
-    double loops_so_far = 0;
-
     // Variable for which set of parameters to use
     string param_set = "Peg";
 
@@ -179,11 +175,15 @@ int main(int argc, char** argv) {
         TORQUE_THRESHOLD = 2;
         KEEP_CONTACT_DISTANCE = 0;
         KEEP_CUTTING_DISTANCE = 0; 
-        RUN_TIME = 90;
+        RUN_TIME = 30;
 
         cutting = true;
         ROS_INFO("Params set for TASK");
     }
+
+    // Used in the loop to determine the run time and time out
+    double total_number_of_loops = RUN_TIME / DT;
+    double loops_so_far = 0;
 
     ROS_INFO("Output from parameter for target_distance; %f", TARGET_DISTANCE); 
 

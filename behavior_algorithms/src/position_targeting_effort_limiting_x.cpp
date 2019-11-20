@@ -11,6 +11,7 @@
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/Wrench.h>
 #include <std_msgs/Float64.h>
+#include <Eigen/Geometry>
 #include <behavior_algorithms/status_service.h>
 using namespace std;
 
@@ -23,6 +24,7 @@ geometry_msgs::Vector3 tool_vector_x;
 geometry_msgs::Vector3 tool_vector_z;
 
 geometry_msgs::Vector3 task_vector_x;
+geometry_msgs::Vector3 task_vector_y;
 geometry_msgs::Vector3 task_vector_z;
 
 // ROS: callback functions for how we receive data
@@ -42,8 +44,11 @@ void tool_vector_z_callback(const geometry_msgs::Vector3& tool_vector_msg_z) {
     tool_vector_z = tool_vector_msg_z;
 }
 
-void task_vector_callback(const geometry_msgs::Vector3& task_vector_msg_x) {
+void task_vector_x_callback(const geometry_msgs::Vector3& task_vector_msg_x) {
     task_vector_x = task_vector_msg_x;
+}
+void task_vector_y_callback(const geometry_msgs::Vector3& task_vector_msg_y) {
+    task_vector_y = task_vector_msg_y;
 }
 void task_vector_z_callback(const geometry_msgs::Vector3& task_vector_msg_z) {
     task_vector_z = task_vector_msg_z;
@@ -59,10 +64,14 @@ int main(int argc, char** argv) {
     // ROS: Define subscribers and publishers used
     ros::Subscriber cartesian_state_subscriber = nh.subscribe("cartesian_logger",1, cartesian_state_callback); // subscribe to the topic publishing the cartesian state of the end effector
     ros::Subscriber ft_subscriber = nh.subscribe("transformed_ft_wrench",1,ft_callback);                       // subscribe to the force/torque sensor data
+
     ros::Subscriber tool_vector_sub_x = nh.subscribe("tool_vector_x",1,tool_vector_callback);                  // subscribe to the value of the tool vector in the x, published from the accomodation controller
     ros::Subscriber tool_vector_sub_z = nh.subscribe("tool_vector_z",1,tool_vector_z_callback);                // subscribe to the value of the tool vector in the z, published from the accomodation controller
-    ros::Subscriber task_vector_sub_x = nh.subscribe("task_vector_x",1,task_vector_callback);                  // subscribe to the value of the task vector in the x, published from the accomodation controller
+
+    ros::Subscriber task_vector_sub_x = nh.subscribe("task_vector_x",1,task_vector_x_callback);                  // subscribe to the value of the task vector in the x, published from the accomodation controller
+    ros::Subscriber task_vector_sub_y = nh.subscribe("task_vector_y",1,task_vector_y_callback);                // subscribe to the value of the task vector in the y, published from the accomodation controller
     ros::Subscriber task_vector_sub_z = nh.subscribe("task_vector_z",1,task_vector_z_callback);                // subscribe to the value of the task vector in the z, published from the accomodation controller
+
     ros::Publisher virtual_attractor_publisher = nh.advertise<geometry_msgs::PoseStamped>("Virt_attr_pose",1); // publish the pose of the virtual attractor for the accomodation controller 
 
     // ROS: Services used in conjunction with buffer.cpp to have delayed program status sent to operator
@@ -96,9 +105,9 @@ int main(int argc, char** argv) {
     // Parameter for if in the cutting state, easier checking later
     bool cutting = false;
 
-    // Used in the loop to determine the run time and time out
-    double total_number_of_loops = RUN_TIME / DT;
-    double loops_so_far = 0;
+    // Parameter if we are in the task frame or the tool frame
+    bool task = false;
+
 
     // Variable for which set of parameters to use
     string param_set = "Peg";
@@ -132,6 +141,7 @@ int main(int argc, char** argv) {
         RUN_TIME = 15;
         
         cutting = false;
+        task = false;
         ROS_INFO("Params set for PEG");
     }
     else if (!strcmp(param_set.c_str(), "Bottle_Cap")){
@@ -145,6 +155,7 @@ int main(int argc, char** argv) {
         RUN_TIME = 15;
 
         cutting = false;
+        task = false;
         ROS_INFO("Params set for BOTTLE_CAP");
     }
     else if (!strcmp(param_set.c_str(), "Tool")){
@@ -158,19 +169,21 @@ int main(int argc, char** argv) {
         RUN_TIME = 15;
 
         cutting = false;
+        task = false;
         ROS_INFO("Params set for TOOL");
     }
     else if (!strcmp(param_set.c_str(), "Cutting")){
         // set the other values here
         PULL_DISTANCE = 0.006;
-        FORCE_THRESHOLD = 4;
+        FORCE_THRESHOLD = 7; // was 4
         NONDIRECTIONAL_FORCE_THRESHOLD = 7;
         TORQUE_THRESHOLD = 2;
         KEEP_CONTACT_DISTANCE = 0;
-        KEEP_CUTTING_DISTANCE = 0.00075; // was 0.001
+        KEEP_CUTTING_DISTANCE = 0.0012; // was 0.001, then 0.00075
         RUN_TIME = 30;
 
         cutting = true;
+        task = true;
         ROS_INFO("Params set for CUTTING");
     }
     else if (!strcmp(param_set.c_str(), "Task")){
@@ -181,11 +194,16 @@ int main(int argc, char** argv) {
         TORQUE_THRESHOLD = 2;
         KEEP_CONTACT_DISTANCE = 0;
         KEEP_CUTTING_DISTANCE = 0; 
-        RUN_TIME = 90;
+        RUN_TIME = 30;
 
-        cutting = true;
+        cutting = false;
+        task = true;
         ROS_INFO("Params set for TASK");
     }
+
+    // Used in the loop to determine the run time and time out
+    double total_number_of_loops = RUN_TIME / DT;
+    double loops_so_far = 0;
 
     ROS_INFO("Output from parameter for target_distance; %f", TARGET_DISTANCE); 
 
@@ -218,12 +236,42 @@ int main(int argc, char** argv) {
     beginning_position.z = current_pose.position.z;
 
     geometry_msgs::Vector3 movement_direction_vector_x;
-    if(cutting){
-        movement_direction_vector_x = task_vector_x;
+    if(task){
+        if(cutting){
+            // if we are cutting, we want to move in the direction of the x vector projected on the plane of the task
+            // movement_direction_vector_x = task_vector_x;
+
+            // define all as eigen so we can do the math more succinctly 
+            Eigen::Vector3d task_vec_x;
+            task_vec_x(0) = task_vector_x.x;
+            task_vec_x(1) = task_vector_x.y;
+            task_vec_x(2) = task_vector_x.z;
+            Eigen::Vector3d task_vec_y;
+            task_vec_y(0) = task_vector_y.x;
+            task_vec_y(1) = task_vector_y.y;
+            task_vec_y(2) = task_vector_y.z;
+
+            Eigen::Vector3d tool_vec_x;
+            tool_vec_x(0) = tool_vector_x.x;
+            tool_vec_x(1) = tool_vector_x.y;
+            tool_vec_x(2) = tool_vector_x.z;
+
+            Eigen::Vector3d x_projection = (tool_vec_x.dot(task_vec_x.normalized())) * task_vec_x.normalized();
+            Eigen::Vector3d y_projection = (tool_vec_x.dot(task_vec_y.normalized())) * task_vec_y.normalized();
+            Eigen::Vector3d planar_projection = x_projection + y_projection;
+            movement_direction_vector_x.x = planar_projection(0);
+            movement_direction_vector_x.y = planar_projection(1);
+            movement_direction_vector_x.z = planar_projection(2);
+            
+        }
+        else{
+            movement_direction_vector_x = task_vector_x;
+        }
     }
     else{
         movement_direction_vector_x = tool_vector_x;   
     }
+
     
     geometry_msgs::Vector3 ending_position;
     ending_position.x = beginning_position.x + movement_direction_vector_x.x * TARGET_DISTANCE;
@@ -252,8 +300,14 @@ int main(int argc, char** argv) {
 
     // Debug output
     cout<<"Tool Vector X"<<endl<<tool_vector_x<<endl;
+    cout<<"Task Vector X: "<<endl<<task_vector_x<<endl<<endl;
+    cout<<"Movement Vector: "<<endl<<movement_direction_vector_x<<endl<<endl;
     cout<<"Difference Vector"<<endl<<vector_to_goal<<endl;
     cout<<"Dot Product"<<endl<<dot_product<<endl<<endl;
+
+    //DEBUG WAIT
+    // int x;
+    // cin>>x;
 
     // Loop variable to check effort limit condition
     bool effort_limit_crossed = false;
@@ -281,33 +335,18 @@ int main(int argc, char** argv) {
         if(TARGET_DISTANCE > 0){
 
             // Move in the task frame if cutting, else use tool frame
-            if(cutting){
-                virtual_attractor.pose.position.x = current_pose.position.x + task_vector_x.x * PULL_DISTANCE + task_vector_z.x * KEEP_CUTTING_DISTANCE;
-                virtual_attractor.pose.position.y = current_pose.position.y + task_vector_x.y * PULL_DISTANCE + task_vector_z.y * KEEP_CUTTING_DISTANCE;
-                virtual_attractor.pose.position.z = current_pose.position.z + task_vector_x.z * PULL_DISTANCE + task_vector_z.z * KEEP_CUTTING_DISTANCE;
-                cout<<"CUTTING"<<endl;
-            }
-            else{
-                virtual_attractor.pose.position.x = current_pose.position.x + tool_vector_x.x * PULL_DISTANCE;
-                virtual_attractor.pose.position.y = current_pose.position.y + tool_vector_x.y * PULL_DISTANCE;
-                virtual_attractor.pose.position.z = current_pose.position.z + tool_vector_x.z * PULL_DISTANCE;
-                cout<<"not CUTTING"<<endl;
-            }
+            
+            virtual_attractor.pose.position.x = current_pose.position.x + movement_direction_vector_x.x * PULL_DISTANCE + task_vector_z.x * KEEP_CUTTING_DISTANCE;
+            virtual_attractor.pose.position.y = current_pose.position.y + movement_direction_vector_x.y * PULL_DISTANCE + task_vector_z.y * KEEP_CUTTING_DISTANCE;
+            virtual_attractor.pose.position.z = current_pose.position.z + movement_direction_vector_x.z * PULL_DISTANCE + task_vector_z.z * KEEP_CUTTING_DISTANCE;
         }
         else {
 
             // Move in the task frame if cutting, else move in tool frame 
-            if(cutting){
-                virtual_attractor.pose.position.x = current_pose.position.x - task_vector_x.x * PULL_DISTANCE + task_vector_z.x * KEEP_CUTTING_DISTANCE;
-                virtual_attractor.pose.position.y = current_pose.position.y - task_vector_x.y * PULL_DISTANCE + task_vector_z.y * KEEP_CUTTING_DISTANCE;
-                virtual_attractor.pose.position.z = current_pose.position.z - task_vector_x.z * PULL_DISTANCE + task_vector_z.z * KEEP_CUTTING_DISTANCE;
-                cout<<"CUTTING"<<endl;
-            }else{
-                virtual_attractor.pose.position.x = current_pose.position.x - tool_vector_x.x * PULL_DISTANCE;
-                virtual_attractor.pose.position.y = current_pose.position.y - tool_vector_x.y * PULL_DISTANCE;
-                virtual_attractor.pose.position.z = current_pose.position.z - tool_vector_x.z * PULL_DISTANCE;
-                cout<<"not CUTTING"<<endl;
-            }
+
+            virtual_attractor.pose.position.x = current_pose.position.x - movement_direction_vector_x.x * PULL_DISTANCE + task_vector_z.x * KEEP_CUTTING_DISTANCE;
+            virtual_attractor.pose.position.y = current_pose.position.y - movement_direction_vector_x.y * PULL_DISTANCE + task_vector_z.y * KEEP_CUTTING_DISTANCE;
+            virtual_attractor.pose.position.z = current_pose.position.z - movement_direction_vector_x.z * PULL_DISTANCE + task_vector_z.z * KEEP_CUTTING_DISTANCE;
         }
         
         vector_to_goal.x = ending_position.x - current_pose.position.x;
