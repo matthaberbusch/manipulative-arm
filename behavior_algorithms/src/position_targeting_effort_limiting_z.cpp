@@ -84,6 +84,8 @@ int main(int argc, char** argv) {
     // Parameter for if in the cutting state, easier checking later
     bool cutting = false;
 
+    // Parameter if we are in the task frame or not
+    bool task = false;
     
 
     // Variable for which set of parameters to use
@@ -118,6 +120,7 @@ int main(int argc, char** argv) {
         RUN_TIME = 15;
         
         cutting = false;
+        task = false;
         ROS_INFO("Params set for PEG");
     }
     else if (!strcmp(param_set.c_str(), "Bottle_Cap")){
@@ -131,6 +134,7 @@ int main(int argc, char** argv) {
         RUN_TIME = 15;
 
         cutting = false;
+        task = false;
         ROS_INFO("Params set for BOTTLE_CAP");
     }
     else if (!strcmp(param_set.c_str(), "Tool")){
@@ -144,6 +148,7 @@ int main(int argc, char** argv) {
         RUN_TIME = 15;
 
         cutting = false;
+        task = false;
         ROS_INFO("Params set for TOOL");
     }
     else if (!strcmp(param_set.c_str(), "Cutting")){
@@ -157,6 +162,7 @@ int main(int argc, char** argv) {
         RUN_TIME = 30;
 
         cutting = true;
+        task = true;
         ROS_INFO("Params set for CUTTING");
     }
     else if (!strcmp(param_set.c_str(), "Task")){
@@ -169,7 +175,8 @@ int main(int argc, char** argv) {
         KEEP_CUTTING_DISTANCE = 0; 
         RUN_TIME = 30;
 
-        cutting = true;
+        cutting = false;
+        task = true;
         ROS_INFO("Params set for TASK");
     }
 
@@ -203,7 +210,7 @@ int main(int argc, char** argv) {
     beginning_position.z = current_pose.position.z;
 
     geometry_msgs::Vector3 movement_direction_vector_z;
-    if(cutting){
+    if(task){
         movement_direction_vector_z = task_vector_z;
     }
     else{
@@ -269,33 +276,17 @@ int main(int argc, char** argv) {
  
         // Move in direction of the task frame when in cutting mode, else move in tool frame
         if(TARGET_DISTANCE > 0){
-            if(cutting){
-                virtual_attractor.pose.position.x = current_pose.position.x + task_vector_z.x * PULL_DISTANCE;
-                virtual_attractor.pose.position.y = current_pose.position.y + task_vector_z.y * PULL_DISTANCE;
-                virtual_attractor.pose.position.z = current_pose.position.z + task_vector_z.z * PULL_DISTANCE;
-                cout<<"CUTTING"<<endl;
-            }
-            else{
-                virtual_attractor.pose.position.x = current_pose.position.x + tool_vector_z.x * PULL_DISTANCE;
-                virtual_attractor.pose.position.y = current_pose.position.y + tool_vector_z.y * PULL_DISTANCE;
-                virtual_attractor.pose.position.z = current_pose.position.z + tool_vector_z.z * PULL_DISTANCE;
-                cout<<"not CUTTING"<<endl;
-            }
+
+            virtual_attractor.pose.position.x = current_pose.position.x + movement_direction_vector_z.x * PULL_DISTANCE;
+            virtual_attractor.pose.position.y = current_pose.position.y + movement_direction_vector_z.y * PULL_DISTANCE;
+            virtual_attractor.pose.position.z = current_pose.position.z + movement_direction_vector_z.z * PULL_DISTANCE;
         }
         // Move in direction of the task frame when in cutting mode, else move in tool frame
         else {
-            if(cutting){
-                virtual_attractor.pose.position.x = current_pose.position.x - task_vector_z.x * PULL_DISTANCE;
-                virtual_attractor.pose.position.y = current_pose.position.y - task_vector_z.y * PULL_DISTANCE;
-                virtual_attractor.pose.position.z = current_pose.position.z - task_vector_z.z * PULL_DISTANCE;
-                cout<<"CUTTING"<<endl;
-            }
-            else{   
-                virtual_attractor.pose.position.x = current_pose.position.x - tool_vector_z.x * PULL_DISTANCE;
-                virtual_attractor.pose.position.y = current_pose.position.y - tool_vector_z.y * PULL_DISTANCE;
-                virtual_attractor.pose.position.z = current_pose.position.z - tool_vector_z.z * PULL_DISTANCE;
-                cout<<"not CUTTING"<<endl;
-            }
+
+            virtual_attractor.pose.position.x = current_pose.position.x - movement_direction_vector_z.x * PULL_DISTANCE;
+            virtual_attractor.pose.position.y = current_pose.position.y - movement_direction_vector_z.y * PULL_DISTANCE;
+            virtual_attractor.pose.position.z = current_pose.position.z - movement_direction_vector_z.z * PULL_DISTANCE;
         }
 
         vector_to_goal.x = ending_position.x - current_pose.position.x;

@@ -179,7 +179,7 @@ int main(int argc, char** argv) {
         NONDIRECTIONAL_FORCE_THRESHOLD = 7;
         TORQUE_THRESHOLD = 2;
         KEEP_CONTACT_DISTANCE = 0;
-        KEEP_CUTTING_DISTANCE = 0.0012; // was 0.001, then 0.00075
+        KEEP_CUTTING_DISTANCE = 0.0003; // was 0.001, then 0.00075
         RUN_TIME = 30;
 
         cutting = true;
@@ -447,8 +447,10 @@ int main(int argc, char** argv) {
         // ROS: for communication between programs
         ros::spinOnce();
 
-        // Put the virtual attractor at the end effector
-        virtual_attractor.pose = current_pose;
+        // Put the virtual attractor at the end effector, but if cutting keep pulling down at the same 
+        virtual_attractor.pose.position.x = current_pose.position.x + task_vector_z.x * KEEP_CUTTING_DISTANCE;
+        virtual_attractor.pose.position.y = current_pose.position.y + task_vector_z.y * KEEP_CUTTING_DISTANCE;
+        virtual_attractor.pose.position.z = current_pose.position.z + task_vector_z.z * KEEP_CUTTING_DISTANCE;
     }
 
     //If we've timed out
@@ -458,8 +460,10 @@ int main(int argc, char** argv) {
         // ROS: for communication between programs
         ros::spinOnce();
 
-        // Put the virtual attractor at the end effector
-        virtual_attractor.pose = current_pose;
+        // Put the virtual attractor at the end effector, but if cutting keep pulling down at the same 
+        virtual_attractor.pose.position.x = current_pose.position.x + task_vector_z.x * KEEP_CUTTING_DISTANCE;
+        virtual_attractor.pose.position.y = current_pose.position.y + task_vector_z.y * KEEP_CUTTING_DISTANCE;
+        virtual_attractor.pose.position.z = current_pose.position.z + task_vector_z.z * KEEP_CUTTING_DISTANCE;
     }
 
     // ROS: Call service to send reason for program end to buffer.cpp

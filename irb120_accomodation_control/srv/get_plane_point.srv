@@ -1,0 +1,6 @@
+uint8 get_point=1
+---
+geometry_msgs/PoseStamped point_a
+geometry_msgs/PoseStamped point_b
+geometry_msgs/PoseStamped point_c
+string status

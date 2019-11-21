@@ -3,3 +3,32 @@ Clean up old files
 Update OTEL to work in task frame
 Add new method to determine task frame
 Create GUI for cutting planning
+
+
+Skill for making new plane out of 3 points:
+1. Skill just passes a point to the accomodation controller (end effector position) (choose which point? maybe use a drop down menu to choose A, B, or C)
+2. Skill to see what points have been set (progress of x/3) (could be same as 3)
+3. Skill to verify that you want to use these 3 points (outputs current task plane, new task plane and the related points of each) then waits for user to confirm or choose to change values. Once confirmed, the plane will be updated in the accomodation controller. 
+
+What we need in the accomodation controller: 
+New message to store all 3 points, and a way to store and then publish the task frame (pose), and we need to decide what the origin will be (maybe point A)
+
+Move the end effector to somewhere, click a button to set the point, repeat total 3 times
+Then auto submits twhen 3 are stored, or waits for a user to confirm,
+
+To generate the plane, the 3 points are taken, plane found between them using M A T H, then the first point (point A), will be marked as the origin, the orientation will then be derived based on the tool pose or the robot base pose? 
+
+Skill for setting a point: (service call too)
+Call the service with the current EE pose as the posestamped in the service, then the accomodation controller will update the value of the appropriate point
+(represented as 3 buttons?)
+
+Skill for getting the 3 points before setting: (just a service call)
+Call the service, get the data from the acc controller. 
+Print that data out (and throughthe buffer). 
+
+Skill for setting the new task frame:
+update the value of the task frame in the accomodation controller appropriately using the 3 approved points by calling the set task frame service call
+If not affirmative, exit. 
+
+Service calls tot he buffer from the accomodation controller for the buffer output. Otherwise all can just be service call buttons and no skills made themselves
+

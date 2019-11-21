@@ -69,6 +69,7 @@ add_service_files(
   FILES
    freeze_service.srv
    set_task_frame.srv
+   set_plane_point.srv
 #   Service2.srv
  )
 

@@ -61,6 +61,11 @@ Eigen::Vector3d y_vec_task_;
 Eigen::Vector3d z_vec_task_;
 geometry_msgs::PoseStamped  task_frame_pose_stamped;
 
+// Declare global variables for points to task frame calculation
+Eigen::Vector3d point_A_;
+Eigen::Vector3d point_B_;
+Eigen::Vector3d point_C_;
+
 // MATH: Function converts a rotation matrix to a vector of angles (phi_x, phi_y, phi_z)
 Eigen::Vector3d decompose_rot_mat(Eigen::Matrix3d rot_mat) {
 	Eigen::Vector3d vec_of_angles;
@@ -213,10 +218,31 @@ bool setTaskFrameCallback(irb120_accomodation_control::set_task_frameRequest &re
 	task_frame_with_respect_to_robot_ = tool_with_respect_to_robot_;
 
 	// Just get the data directly from the tool frame, the service does not send or receive data, just used as a trigger mechanism
-	task_frame_rotation_matrix_ = task_frame_with_respect_to_robot_.linear();
-	x_vec_task_ = task_frame_rotation_matrix_.col(0);
-	y_vec_task_ = task_frame_rotation_matrix_.col(1);
-	z_vec_task_ = task_frame_rotation_matrix_.col(2);
+	// task_frame_rotation_matrix_ = task_frame_with_respect_to_robot_.linear();
+	// x_vec_task_ = task_frame_rotation_matrix_.col(0);
+	// y_vec_task_ = task_frame_rotation_matrix_.col(1);
+	// z_vec_task_ = task_frame_rotation_matrix_.col(2);
+
+	// New task frame stuff:
+		Eigen::Vector3d AB_vector;
+		Eigen::Vector3d AC_vector;
+
+		AB_vector(0) = point_B_(0) - point_A_(0);
+		AB_vector(1) = point_B_(1) - point_A_(1);
+		AB_vector(2) = point_B_(2) - point_A_(2);
+
+		AC_vector(0) = point_C_(0) - point_A_(0);
+		AC_vector(1) = point_C_(1) - point_A_(1);
+		AC_vector(2) = point_C_(2) - point_A_(2);
+
+		z_vec_task_ = AB_vector.cross(AC_vector).normalized();
+		x_vec_task_ = AB_vector.normalized();
+		y_vec_task_ = z_vec_task_.cross(x_vec_task_);
+
+		task_frame_rotation_matrix_.col(0) = x_vec_task_;
+		task_frame_rotation_matrix_.col(1) = y_vec_task_;
+		task_frame_rotation_matrix_.col(2) = z_vec_task_;
+
 	x_vec_task_message_.x = x_vec_task_(0);
 	x_vec_task_message_.y = x_vec_task_(1);
 	x_vec_task_message_.z = x_vec_task_(2);
@@ -228,10 +254,11 @@ bool setTaskFrameCallback(irb120_accomodation_control::set_task_frameRequest &re
 	z_vec_task_message_.z = z_vec_task_(2);
 
 	// Define task frame as a pose stamped
-	 task_frame_pose_stamped.pose.position.x = task_frame_with_respect_to_robot_.translation()(0);
-	 task_frame_pose_stamped.pose.position.y = task_frame_with_respect_to_robot_.translation()(1);
-	 task_frame_pose_stamped.pose.position.z = task_frame_with_respect_to_robot_.translation()(2);
+	 task_frame_pose_stamped.pose.position.x = point_A_(0);
+	 task_frame_pose_stamped.pose.position.y = point_A_(1);
+	 task_frame_pose_stamped.pose.position.z = point_A_(2);
 	 Eigen::Quaterniond task_frame_orientation_quaternion(task_frame_with_respect_to_robot_.linear());
+	 // Eigen::Quaterniond task_frame_orientation_quaternion(task_frame_rotation_matrix_); // TODO switch these lines and find out what is wrong with this one
 	 task_frame_pose_stamped.pose.orientation.x = task_frame_orientation_quaternion.x();
 	 task_frame_pose_stamped.pose.orientation.y = task_frame_orientation_quaternion.y();
 	 task_frame_pose_stamped.pose.orientation.z = task_frame_orientation_quaternion.z();
@@ -241,6 +268,14 @@ bool setTaskFrameCallback(irb120_accomodation_control::set_task_frameRequest &re
 	return true; 
 }
 
+// in progress 11/20/19
+
+// bool setPlanePointCallback(irb120_accomodation_control::set_plane_pointRequest &request, irb120_accomodation_control::set_plane_pointResponse &response) {
+// point_A_ = current_end_effector_pose.head(); //TODO make current_end_effector a global
+
+// response.status = "point A set"
+// return true;
+// }
 
 
 // Main rogram
