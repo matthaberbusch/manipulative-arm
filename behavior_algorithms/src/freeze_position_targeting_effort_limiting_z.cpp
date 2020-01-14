@@ -11,8 +11,9 @@
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/Wrench.h>
 #include <std_msgs/Float64.h>
-#include <Eigen/Geometry>
+#include <std_msgs/Int8.h>
 #include <behavior_algorithms/status_service.h>
+#include <irb120_accomodation_control/freeze_service.h>
 using namespace std;
 
 // Declare variables
@@ -20,12 +21,12 @@ geometry_msgs::Pose current_pose;
 geometry_msgs::PoseStamped virtual_attractor;
 geometry_msgs::Wrench ft_in_robot_frame;
 
-geometry_msgs::Vector3 tool_vector_x;
 geometry_msgs::Vector3 tool_vector_z;
-
-geometry_msgs::Vector3 task_vector_x;
-geometry_msgs::Vector3 task_vector_y;
 geometry_msgs::Vector3 task_vector_z;
+
+std_msgs::Int8 freeze_mode_status;
+bool freeze_mode; // maybe don't define it as having a starting value? 
+bool freeze_updated = false;
 
 // ROS: callback functions for how we receive data
 void cartesian_state_callback(const geometry_msgs::PoseStamped& cartesian_pose) {
@@ -37,21 +38,19 @@ void ft_callback(const geometry_msgs::Wrench& ft_values) {
     ft_in_robot_frame = ft_values;
 }
 
-void tool_vector_callback(const geometry_msgs::Vector3& tool_vector_msg_x) {
-    tool_vector_x = tool_vector_msg_x;
-}
-void tool_vector_z_callback(const geometry_msgs::Vector3& tool_vector_msg_z) {
+void tool_vector_callback(const geometry_msgs::Vector3& tool_vector_msg_z) {
     tool_vector_z = tool_vector_msg_z;
 }
-
-void task_vector_x_callback(const geometry_msgs::Vector3& task_vector_msg_x) {
-    task_vector_x = task_vector_msg_x;
-}
-void task_vector_y_callback(const geometry_msgs::Vector3& task_vector_msg_y) {
-    task_vector_y = task_vector_msg_y;
-}
-void task_vector_z_callback(const geometry_msgs::Vector3& task_vector_msg_z) {
+void task_vector_callback(const geometry_msgs::Vector3& task_vector_msg_z) {
     task_vector_z = task_vector_msg_z;
+}
+
+void freeze_status_callback(const std_msgs::Int8& freeze_status_msg) {
+    freeze_updated = true;
+    freeze_mode_status = freeze_status_msg;
+    // cout<<freeze_mode_status<<endl;
+    if(freeze_mode_status.data == 1) freeze_mode = true;
+    else freeze_mode = false;
 }
 
 
@@ -64,23 +63,29 @@ int main(int argc, char** argv) {
     // ROS: Define subscribers and publishers used
     ros::Subscriber cartesian_state_subscriber = nh.subscribe("cartesian_logger",1, cartesian_state_callback); // subscribe to the topic publishing the cartesian state of the end effector
     ros::Subscriber ft_subscriber = nh.subscribe("transformed_ft_wrench",1,ft_callback);                       // subscribe to the force/torque sensor data
-
-    ros::Subscriber tool_vector_sub_x = nh.subscribe("tool_vector_x",1,tool_vector_callback);                  // subscribe to the value of the tool vector in the x, published from the accomodation controller
-    ros::Subscriber tool_vector_sub_z = nh.subscribe("tool_vector_z",1,tool_vector_z_callback);                // subscribe to the value of the tool vector in the z, published from the accomodation controller
-
-    ros::Subscriber task_vector_sub_x = nh.subscribe("task_vector_x",1,task_vector_x_callback);                  // subscribe to the value of the task vector in the x, published from the accomodation controller
-    ros::Subscriber task_vector_sub_y = nh.subscribe("task_vector_y",1,task_vector_y_callback);                // subscribe to the value of the task vector in the y, published from the accomodation controller
-    ros::Subscriber task_vector_sub_z = nh.subscribe("task_vector_z",1,task_vector_z_callback);                // subscribe to the value of the task vector in the z, published from the accomodation controller
-
+    ros::Subscriber tool_vector_sub_z = nh.subscribe("tool_vector_z",1,tool_vector_callback);                  // subscribe to the value of the tool vector in the z, published from the accomodation controller
+    ros::Subscriber task_vector_sub_z = nh.subscribe("task_vector_z",1,task_vector_callback);                  // subscribe to the value of the task vector in the z, published from the accomodation controller
     ros::Publisher virtual_attractor_publisher = nh.advertise<geometry_msgs::PoseStamped>("Virt_attr_pose",1); // publish the pose of the virtual attractor for the accomodation controller 
 
     // ROS: Services used in conjunction with buffer.cpp to have delayed program status sent to operator
     ros::ServiceClient client = nh.serviceClient<behavior_algorithms::status_service>("status_service");
     ros::ServiceClient client_start = nh.serviceClient<behavior_algorithms::status_service>("start_service");
     
+    // Define services and subscribers for the freeze mode status
+
+    // subscriber for freeze mode status (used in loop cond)
+    ros::Subscriber freeze_mode_sub = nh.subscribe("freeze_mode_topic",1,freeze_status_callback);
+    
+    // service client for setting and unsetting freeze mode at start of program
+    ros::ServiceClient freeze_client = nh.serviceClient<irb120_accomodation_control::freeze_service>("freeze_service");
+
+
     // ROS: Service status variable for use with buffer.cpp
     behavior_algorithms::status_service srv;
-    srv.request.name = "PTEL_x";
+    srv.request.name = "PTEL_z";
+
+    //ROS: Service for toggling freeze mode
+    irb120_accomodation_control::freeze_service freeze_srv;
 
     /*
     How to tune params:
@@ -105,9 +110,9 @@ int main(int argc, char** argv) {
     // Parameter for if in the cutting state, easier checking later
     bool cutting = false;
 
-    // Parameter if we are in the task frame or the tool frame
+    // Parameter if we are in the task frame or not
     bool task = false;
-
+    
 
     // Variable for which set of parameters to use
     string param_set = "Peg";
@@ -116,8 +121,42 @@ int main(int argc, char** argv) {
     ros::Rate naptime(1/DT);
 
     // ROS: for communication between programs
-    ros::spinOnce();
-    naptime.sleep();
+
+    // spin, while we don't have data
+    while(!freeze_updated){
+        ros::spinOnce();
+        naptime.sleep();
+    }
+    
+    
+    // Check here after a spin, and unfreeze if it is frozen
+    while(freeze_mode_status.data == 1 && freeze_mode){
+        
+        if(freeze_client.call(freeze_srv)){
+            // success
+            cout<<"Called freeze mode service succesfully"<<endl;
+        }
+        else{
+            // failed to call service
+            ROS_ERROR("Failed to call freeze service");
+        }
+        ros::spinOnce();
+        naptime.sleep();
+        freeze_updated = false;
+
+    }
+    
+    // spin, while we don't have data
+    while(!freeze_updated){
+        ros::spinOnce();
+        naptime.sleep();
+    }
+
+
+    cout<<freeze_mode_status<<endl;
+    cout<<freeze_srv.response<<endl;
+
+    // should now be unfrozen
 
     // The end effector pose (current_pose) and force torque data (ft_in_robot_frame) are global variables.
     
@@ -174,12 +213,12 @@ int main(int argc, char** argv) {
     }
     else if (!strcmp(param_set.c_str(), "Cutting")){
         // set the other values here
-        PULL_DISTANCE = 0.006;
-        FORCE_THRESHOLD = 7; // was 4
+        PULL_DISTANCE = 0.005;
+        FORCE_THRESHOLD = 4;
         NONDIRECTIONAL_FORCE_THRESHOLD = 7;
         TORQUE_THRESHOLD = 2;
         KEEP_CONTACT_DISTANCE = 0;
-        KEEP_CUTTING_DISTANCE = 0.0012; // was 0.001, then 0.00075
+        KEEP_CUTTING_DISTANCE = 0.00075; // was 0.001
         RUN_TIME = 30;
 
         cutting = true;
@@ -201,10 +240,6 @@ int main(int argc, char** argv) {
         ROS_INFO("Params set for TASK");
     }
 
-    // Used in the loop to determine the run time and time out
-    double total_number_of_loops = RUN_TIME / DT;
-    double loops_so_far = 0;
-
     ROS_INFO("Output from parameter for target_distance; %f", TARGET_DISTANCE); 
 
     // With labeled parameter, now call service to send message that program will start
@@ -220,65 +255,34 @@ int main(int argc, char** argv) {
     }
     else{
         // failed to call service
-        ROS_ERROR("Failed to call service service_start");
+        // ROS_ERROR("Failed to call service service_start");
+        naptime.sleep();
     }
 
     // Set as unknown in case program somehow progresses past loop without any of the 3 conditions
     srv.request.status = "Unkown";
 
-
-   // ROS: Wait until we have position data. Our default position is 0.
-    while(current_pose.position.x == 0 || tool_vector_x.x == 0 || task_vector_z.x == 0) ros::spinOnce();
+    // ROS: Wait until we have position data. Our default position is 0.
+    while(current_pose.position.x == 0 || tool_vector_z.x == 0 || task_vector_z.x == 0) ros::spinOnce();
 
     geometry_msgs::Vector3 beginning_position;
     beginning_position.x = current_pose.position.x;
     beginning_position.y = current_pose.position.y;
     beginning_position.z = current_pose.position.z;
 
-    geometry_msgs::Vector3 movement_direction_vector_x;
+    geometry_msgs::Vector3 movement_direction_vector_z;
     if(task){
-        if(cutting){
-            // if we are cutting, we want to move in the direction of the x vector projected on the plane of the task
-            // movement_direction_vector_x = task_vector_x;
-
-            // define all as eigen so we can do the math more succinctly 
-            Eigen::Vector3d task_vec_x;
-            task_vec_x(0) = task_vector_x.x;
-            task_vec_x(1) = task_vector_x.y;
-            task_vec_x(2) = task_vector_x.z;
-            Eigen::Vector3d task_vec_y;
-            task_vec_y(0) = task_vector_y.x;
-            task_vec_y(1) = task_vector_y.y;
-            task_vec_y(2) = task_vector_y.z;
-
-            Eigen::Vector3d tool_vec_x;
-            tool_vec_x(0) = tool_vector_x.x;
-            tool_vec_x(1) = tool_vector_x.y;
-            tool_vec_x(2) = tool_vector_x.z;
-
-            Eigen::Vector3d x_projection = (tool_vec_x.dot(task_vec_x.normalized())) * task_vec_x.normalized();
-            Eigen::Vector3d y_projection = (tool_vec_x.dot(task_vec_y.normalized())) * task_vec_y.normalized();
-            Eigen::Vector3d planar_projection = x_projection + y_projection;
-            planar_projection = planar_projection.normalized(); 
-            movement_direction_vector_x.x = planar_projection(0);
-            movement_direction_vector_x.y = planar_projection(1);
-            movement_direction_vector_x.z = planar_projection(2);
-        }
-        else{
-            movement_direction_vector_x = task_vector_x;
-        }
+        movement_direction_vector_z = task_vector_z;
     }
     else{
-        movement_direction_vector_x = tool_vector_x;   
+        movement_direction_vector_z = tool_vector_z;   
     }
 
-    
     geometry_msgs::Vector3 ending_position;
-    ending_position.x = beginning_position.x + movement_direction_vector_x.x * TARGET_DISTANCE;
-    ending_position.y = beginning_position.y + movement_direction_vector_x.y * TARGET_DISTANCE;
-    ending_position.z = beginning_position.z + movement_direction_vector_x.z * TARGET_DISTANCE;
-
-
+    ending_position.x = beginning_position.x + movement_direction_vector_z.x * TARGET_DISTANCE;
+    ending_position.y = beginning_position.y + movement_direction_vector_z.y * TARGET_DISTANCE;
+    ending_position.z = beginning_position.z + movement_direction_vector_z.z * TARGET_DISTANCE;
+    
     // Vector of the difference between the end pose and current pose, used to calculate if we reached target
     geometry_msgs::Vector3 vector_to_goal;
     vector_to_goal.x = ending_position.x - current_pose.position.x;
@@ -286,7 +290,7 @@ int main(int argc, char** argv) {
     vector_to_goal.z = ending_position.z - current_pose.position.z;
 
     // Dot product, uf the value is above 0, we hit the target movement
-    double dot_product = vector_to_goal.x * movement_direction_vector_x.x + vector_to_goal.y * movement_direction_vector_x.y + vector_to_goal.z * movement_direction_vector_x.z;
+    double dot_product = vector_to_goal.x * movement_direction_vector_z.x + vector_to_goal.y * movement_direction_vector_z.y + vector_to_goal.z * movement_direction_vector_z.z;
     
     // If it is past the plane perpendicular to the direction of movement at the goal position, then we have reached the target 
     bool target_reached;
@@ -299,20 +303,24 @@ int main(int argc, char** argv) {
     }
 
     // Debug output
-    cout<<"Tool Vector X"<<endl<<tool_vector_x<<endl;
-    cout<<"Task Vector X: "<<endl<<task_vector_x<<endl<<endl;
-    cout<<"Movement Vector: "<<endl<<movement_direction_vector_x<<endl<<endl;
+    cout<<"Tool Vector Z"<<endl<<tool_vector_z<<endl;
     cout<<"Difference Vector"<<endl<<vector_to_goal<<endl;
     cout<<"Dot Product"<<endl<<dot_product<<endl<<endl;
 
-    //DEBUG WAIT
-    // int x;
-    // cin>>x;
+    // Output for whether we are frozen or not
+    cout<<"Freeze status: "<<freeze_mode<<endl<<"Freeze message: "<<freeze_mode_status<<endl<<endl;
+
+    // ROS_INFO(freeze_mode_status);
 
     // Loop variable to check effort limit condition
     bool effort_limit_crossed = false;
     effort_limit_crossed = ((abs(ft_in_robot_frame.torque.x) > TORQUE_THRESHOLD) || (abs(ft_in_robot_frame.torque.y) > TORQUE_THRESHOLD) || (abs(ft_in_robot_frame.torque.z) > TORQUE_THRESHOLD) ||
-                                 (abs(ft_in_robot_frame.force.x) > NONDIRECTIONAL_FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.y) > FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.z) > NONDIRECTIONAL_FORCE_THRESHOLD));
+                                 (abs(ft_in_robot_frame.force.x) > FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.y) > NONDIRECTIONAL_FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.z) > NONDIRECTIONAL_FORCE_THRESHOLD));
+
+
+    // Used in the loop to determine the run time and time out
+    double total_number_of_loops = RUN_TIME / DT;
+    double loops_so_far = 0;
 
     // Begin loop
     // Assuming we're always going in the x direction.
@@ -321,41 +329,39 @@ int main(int argc, char** argv) {
     1. The operation has timed out (ran the max alloted time)
     2. One of the effort thresholds has been crossed
     3. The target orientation has been reached
+    4. There was an external call to freeze the system, exiting this command
     */
 
-    
-    while( (loops_so_far <= total_number_of_loops) && !effort_limit_crossed && !target_reached) {
+    // Add condition for if it is in freeze mode (should be unfrozen before this step above, at definitions of services and publishers)
+
+    while( (loops_so_far <= total_number_of_loops) && !effort_limit_crossed && !target_reached && !freeze_mode) {
         // ROS: for communication between programs
         ros::spinOnce();
-
 
         // Keep virtual attractor at a distance, to pull the end effector
         virtual_attractor.pose = current_pose;
  
-        // Move in the appropriate direction of either tool or task frame
+        // Move in direction of the task frame when in cutting mode, else move in tool frame
         if(TARGET_DISTANCE > 0){
 
-            // Move in the task frame if cutting, else use tool frame
-            
-            virtual_attractor.pose.position.x = current_pose.position.x + movement_direction_vector_x.x * PULL_DISTANCE + task_vector_z.x * KEEP_CUTTING_DISTANCE;
-            virtual_attractor.pose.position.y = current_pose.position.y + movement_direction_vector_x.y * PULL_DISTANCE + task_vector_z.y * KEEP_CUTTING_DISTANCE;
-            virtual_attractor.pose.position.z = current_pose.position.z + movement_direction_vector_x.z * PULL_DISTANCE + task_vector_z.z * KEEP_CUTTING_DISTANCE;
+            virtual_attractor.pose.position.x = current_pose.position.x + movement_direction_vector_z.x * PULL_DISTANCE;
+            virtual_attractor.pose.position.y = current_pose.position.y + movement_direction_vector_z.y * PULL_DISTANCE;
+            virtual_attractor.pose.position.z = current_pose.position.z + movement_direction_vector_z.z * PULL_DISTANCE;
         }
+        // Move in direction of the task frame when in cutting mode, else move in tool frame
         else {
 
-            // Move in the task frame if cutting, else move in tool frame 
-
-            virtual_attractor.pose.position.x = current_pose.position.x - movement_direction_vector_x.x * PULL_DISTANCE + task_vector_z.x * KEEP_CUTTING_DISTANCE;
-            virtual_attractor.pose.position.y = current_pose.position.y - movement_direction_vector_x.y * PULL_DISTANCE + task_vector_z.y * KEEP_CUTTING_DISTANCE;
-            virtual_attractor.pose.position.z = current_pose.position.z - movement_direction_vector_x.z * PULL_DISTANCE + task_vector_z.z * KEEP_CUTTING_DISTANCE;
+            virtual_attractor.pose.position.x = current_pose.position.x - movement_direction_vector_z.x * PULL_DISTANCE;
+            virtual_attractor.pose.position.y = current_pose.position.y - movement_direction_vector_z.y * PULL_DISTANCE;
+            virtual_attractor.pose.position.z = current_pose.position.z - movement_direction_vector_z.z * PULL_DISTANCE;
         }
-        
+
         vector_to_goal.x = ending_position.x - current_pose.position.x;
         vector_to_goal.y = ending_position.y - current_pose.position.y;
         vector_to_goal.z = ending_position.z - current_pose.position.z;
 
         // Dot product, uf the value is above 0, we hit the target movement
-        double dot_product = vector_to_goal.x * movement_direction_vector_x.x + vector_to_goal.y * movement_direction_vector_x.y + vector_to_goal.z * movement_direction_vector_x.z;
+        double dot_product = vector_to_goal.x * movement_direction_vector_z.x + vector_to_goal.y * movement_direction_vector_z.y + vector_to_goal.z * movement_direction_vector_z.z;
         
         // If it is past the plane perpendicular to the direction of movement at the goal position, then we have reached the target 
         if(TARGET_DISTANCE < 0){
@@ -367,12 +373,7 @@ int main(int argc, char** argv) {
 
         // Update the values for the loop condition
         effort_limit_crossed = ((abs(ft_in_robot_frame.torque.x) > TORQUE_THRESHOLD) || (abs(ft_in_robot_frame.torque.y) > TORQUE_THRESHOLD) || (abs(ft_in_robot_frame.torque.z) > TORQUE_THRESHOLD) ||
-                                 (abs(ft_in_robot_frame.force.x) > NONDIRECTIONAL_FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.y) > FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.z) > NONDIRECTIONAL_FORCE_THRESHOLD));
-
-        if(effort_limit_crossed){
-            cout<<"Effort threshold crossed INSIDE LOOP"<<endl;
-            cout<<ft_in_robot_frame<<endl;
-        }
+                                 (abs(ft_in_robot_frame.force.x) > FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.y) > NONDIRECTIONAL_FORCE_THRESHOLD) || (abs(ft_in_robot_frame.force.z) > NONDIRECTIONAL_FORCE_THRESHOLD));
 
         loops_so_far = loops_so_far + 1;
 
@@ -387,6 +388,7 @@ int main(int argc, char** argv) {
         // Print current position
         // cout<<"Current position: "<<endl<<abs(current_pose.position.x)<<endl;
     }
+
     
     // If we've crossed the effort limts, check which is crossed for the status output
     if(effort_limit_crossed) {
@@ -404,11 +406,11 @@ int main(int argc, char** argv) {
             cout<<"Z Torque threshold crossed"<<endl;
             srv.request.status = "Z Torque threshold crossed";
         }
-        else if(abs(ft_in_robot_frame.force.x) > NONDIRECTIONAL_FORCE_THRESHOLD){
+        else if(abs(ft_in_robot_frame.force.x) > FORCE_THRESHOLD){
             cout<<"X Force threshold crossed"<<endl;
             srv.request.status = "X Force threshold crossed";
         }
-        else if(abs(ft_in_robot_frame.force.y) > FORCE_THRESHOLD){
+        else if(abs(ft_in_robot_frame.force.y) > NONDIRECTIONAL_FORCE_THRESHOLD){
             cout<<"Y Force threshold crossed"<<endl;
             srv.request.status = "Y Force threshold crossed";
         }
@@ -418,7 +420,6 @@ int main(int argc, char** argv) {
         }
         else{
             cout<<"Effort threshold crossed"<<endl;
-            cout<<ft_in_robot_frame<<endl;
             srv.request.status = "Effort threshold crossed";
         }
 
@@ -428,30 +429,33 @@ int main(int argc, char** argv) {
         // Keep the virtual attractor slightly below the surface, or above if pulling back
         virtual_attractor.pose = current_pose;
         if(TARGET_DISTANCE > 0){
-            virtual_attractor.pose.position.x = current_pose.position.x + tool_vector_x.x * KEEP_CONTACT_DISTANCE;
-            virtual_attractor.pose.position.y = current_pose.position.y + tool_vector_x.y * KEEP_CONTACT_DISTANCE;
-            virtual_attractor.pose.position.z = current_pose.position.z + tool_vector_x.z * KEEP_CONTACT_DISTANCE;
+            virtual_attractor.pose.position.x = current_pose.position.x + tool_vector_z.x * KEEP_CONTACT_DISTANCE;
+            virtual_attractor.pose.position.y = current_pose.position.y + tool_vector_z.y * KEEP_CONTACT_DISTANCE;
+            virtual_attractor.pose.position.z = current_pose.position.z + tool_vector_z.z * KEEP_CONTACT_DISTANCE;
         }
         // Pull up in the direction of the tool
         else {
-            virtual_attractor.pose.position.x = current_pose.position.x - tool_vector_x.x * KEEP_CONTACT_DISTANCE;
-            virtual_attractor.pose.position.y = current_pose.position.y - tool_vector_x.y * KEEP_CONTACT_DISTANCE;
-            virtual_attractor.pose.position.z = current_pose.position.z - tool_vector_x.z * KEEP_CONTACT_DISTANCE;
+            virtual_attractor.pose.position.x = current_pose.position.x - tool_vector_z.x * KEEP_CONTACT_DISTANCE;
+            virtual_attractor.pose.position.y = current_pose.position.y - tool_vector_z.y * KEEP_CONTACT_DISTANCE;
+            virtual_attractor.pose.position.z = current_pose.position.z - tool_vector_z.z * KEEP_CONTACT_DISTANCE;
         }
+        // Wait for some time, then go to a freeze
+
     }
 
+    // Convert to an else? or rearrange the time out cond
+
     // If we've reached target position
-    if(target_reached) {
+    if(target_reached) { // (abs(current_pose.position.x) >= target_position && (TARGET_DISTANCE > 0) ) || (abs(current_pose.position.x) < target_position && (TARGET_DISTANCE <= 0) ) 
         // Print message
         cout<<"Target position reached"<<endl;
         srv.request.status = "target position reached";
         // ROS: for communication between programs
         ros::spinOnce();
 
-        // Put the virtual attractor at the end effector, but if cutting keep pulling down at the same 
-        virtual_attractor.pose.position.x = current_pose.position.x + task_vector_z.x * KEEP_CUTTING_DISTANCE;
-        virtual_attractor.pose.position.y = current_pose.position.y + task_vector_z.y * KEEP_CUTTING_DISTANCE;
-        virtual_attractor.pose.position.z = current_pose.position.z + task_vector_z.z * KEEP_CUTTING_DISTANCE;
+        // Put the virtual attractor at the end effector
+        virtual_attractor.pose = current_pose;
+        // go to freeze mode
     }
 
     //If we've timed out
@@ -461,11 +465,45 @@ int main(int argc, char** argv) {
         // ROS: for communication between programs
         ros::spinOnce();
 
-        // Put the virtual attractor at the end effector, but if cutting keep pulling down at the same 
-        virtual_attractor.pose.position.x = current_pose.position.x + task_vector_z.x * KEEP_CUTTING_DISTANCE;
-        virtual_attractor.pose.position.y = current_pose.position.y + task_vector_z.y * KEEP_CUTTING_DISTANCE;
-        virtual_attractor.pose.position.z = current_pose.position.z + task_vector_z.z * KEEP_CUTTING_DISTANCE;
+        // Put the virtual attractor at the end effector
+        virtual_attractor.pose = current_pose;
+        // go to freeze mode
     }
+
+    // If the freeze service was called (like a user interrupt)
+    // if already in freeze mode (user kill command) send output of why program exited
+    if(freeze_mode){
+        cout<<"Freeze mode called during loop, ending program."<<endl;
+        srv.request.status = "User interrupt";
+        // ROS: for communication between programs
+        ros::spinOnce();
+
+        // Put the virtual attractor at the end effector
+        // virtual_attractor.pose = current_pose; // may be useless here, but setting it anyways just in case
+
+        // go to freeze mode
+    }
+
+
+    // // debug out
+    // cout<<"Tool Vec Z"<<endl;
+    // cout<<tool_vector_z<<endl;
+    // cout<<"Task Vec Z"<<endl;
+    // cout<<task_vector_z<<endl<<endl;
+
+    // ROS: for communication between programs
+    virtual_attractor_publisher.publish(virtual_attractor);
+    naptime.sleep();
+
+    // If we have crossed the effort limit, we want the program to wait for 30 seconds before going to freeze mode, to allow the system to settle
+    // if(effort_limit_crossed){
+    //     ros::Duration(30).sleep();
+    // }
+    // if(target_reached){
+    //     ros::Duration(5).sleep();
+    // }
+    
+    // Go to freeze mode (if not already in it)
 
     // ROS: Call service to send reason for program end to buffer.cpp
     if(client.call(srv)){
@@ -474,12 +512,14 @@ int main(int argc, char** argv) {
     }
     else{
         // failed to call service
-        ROS_ERROR("Failed to call service status_service");
+        // ROS_ERROR("Failed to call service status_service");
+        naptime.sleep();
     }
-    
-    // ROS: for communication between programs
-    virtual_attractor_publisher.publish(virtual_attractor);
-    naptime.sleep();
+
+    // If we are not in the freeze mode, put the system into freeze mode before we exit
+    if(!freeze_mode){
+        freeze_client.call(freeze_srv);
+    }
 
     // End of program
 }

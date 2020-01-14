@@ -11,7 +11,9 @@
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/Wrench.h>
 #include <std_msgs/Float64.h>
+#include <std_msgs/Int8.h>
 #include <behavior_algorithms/status_service.h>
+#include <irb120_accomodation_control/freeze_service.h>
 using namespace std;
 
 // Declare variables
@@ -40,6 +42,7 @@ void task_vector_callback(const geometry_msgs::Vector3& task_vector_msg_z) {
 }
 
 
+
 // ROS: main program
 int main(int argc, char** argv) {
     // ROS: for communication between programs
@@ -57,9 +60,11 @@ int main(int argc, char** argv) {
     ros::ServiceClient client = nh.serviceClient<behavior_algorithms::status_service>("status_service");
     ros::ServiceClient client_start = nh.serviceClient<behavior_algorithms::status_service>("start_service");
     
+
     // ROS: Service status variable for use with buffer.cpp
     behavior_algorithms::status_service srv;
     srv.request.name = "PTEL_z";
+
 
     /*
     How to tune params:
@@ -95,8 +100,11 @@ int main(int argc, char** argv) {
     ros::Rate naptime(1/DT);
 
     // ROS: for communication between programs
+
     ros::spinOnce();
     naptime.sleep();
+
+    // should now be unfrozen
 
     // The end effector pose (current_pose) and force torque data (ft_in_robot_frame) are global variables.
     
@@ -126,7 +134,7 @@ int main(int argc, char** argv) {
     else if (!strcmp(param_set.c_str(), "Bottle_Cap")){
         // set the other values here
         PULL_DISTANCE = 0.015;
-        FORCE_THRESHOLD = 15;
+        FORCE_THRESHOLD = 14;
         NONDIRECTIONAL_FORCE_THRESHOLD = 20;
         TORQUE_THRESHOLD = 2;
         KEEP_CONTACT_DISTANCE = 0.0075;
@@ -195,7 +203,8 @@ int main(int argc, char** argv) {
     }
     else{
         // failed to call service
-        ROS_ERROR("Failed to call service service_start");
+        // ROS_ERROR("Failed to call service service_start");
+        naptime.sleep();
     }
 
     // Set as unknown in case program somehow progresses past loop without any of the 3 conditions
@@ -246,6 +255,7 @@ int main(int argc, char** argv) {
     cout<<"Difference Vector"<<endl<<vector_to_goal<<endl;
     cout<<"Dot Product"<<endl<<dot_product<<endl<<endl;
 
+    // ROS_INFO(freeze_mode_status);
 
     // Loop variable to check effort limit condition
     bool effort_limit_crossed = false;
@@ -264,10 +274,12 @@ int main(int argc, char** argv) {
     1. The operation has timed out (ran the max alloted time)
     2. One of the effort thresholds has been crossed
     3. The target orientation has been reached
+    4. There was an external call to freeze the system, exiting this command
     */
 
-    
-    while( (loops_so_far <= total_number_of_loops) && !effort_limit_crossed && !target_reached ) {
+    // Add condition for if it is in freeze mode (should be unfrozen before this step above, at definitions of services and publishers)
+
+    while( (loops_so_far <= total_number_of_loops) && !effort_limit_crossed && !target_reached) {
         // ROS: for communication between programs
         ros::spinOnce();
 
@@ -321,6 +333,7 @@ int main(int argc, char** argv) {
         // Print current position
         // cout<<"Current position: "<<endl<<abs(current_pose.position.x)<<endl;
     }
+
     
     // If we've crossed the effort limts, check which is crossed for the status output
     if(effort_limit_crossed) {
@@ -371,8 +384,11 @@ int main(int argc, char** argv) {
             virtual_attractor.pose.position.y = current_pose.position.y - tool_vector_z.y * KEEP_CONTACT_DISTANCE;
             virtual_attractor.pose.position.z = current_pose.position.z - tool_vector_z.z * KEEP_CONTACT_DISTANCE;
         }
+        // Wait for some time, then go to a freeze
 
     }
+
+    // Convert to an else? or rearrange the time out cond
 
     // If we've reached target position
     if(target_reached) { // (abs(current_pose.position.x) >= target_position && (TARGET_DISTANCE > 0) ) || (abs(current_pose.position.x) < target_position && (TARGET_DISTANCE <= 0) ) 
@@ -384,6 +400,7 @@ int main(int argc, char** argv) {
 
         // Put the virtual attractor at the end effector
         virtual_attractor.pose = current_pose;
+        // go to freeze mode
     }
 
     //If we've timed out
@@ -395,7 +412,21 @@ int main(int argc, char** argv) {
 
         // Put the virtual attractor at the end effector
         virtual_attractor.pose = current_pose;
+        // go to freeze mode
     }
+
+
+
+    // // debug out
+    // cout<<"Tool Vec Z"<<endl;
+    // cout<<tool_vector_z<<endl;
+    // cout<<"Task Vec Z"<<endl;
+    // cout<<task_vector_z<<endl<<endl;
+
+    // ROS: for communication between programs
+    virtual_attractor_publisher.publish(virtual_attractor);
+    naptime.sleep();
+
 
     // ROS: Call service to send reason for program end to buffer.cpp
     if(client.call(srv)){
@@ -404,18 +435,9 @@ int main(int argc, char** argv) {
     }
     else{
         // failed to call service
-        ROS_ERROR("Failed to call service status_service");
+        // ROS_ERROR("Failed to call service status_service");
+        naptime.sleep();
     }
-    
-    // debug out
-    cout<<"Tool Vec Z"<<endl;
-    cout<<tool_vector_z<<endl;
-    cout<<"Task Vec Z"<<endl;
-    cout<<task_vector_z<<endl<<endl;
-
-    // ROS: for communication between programs
-    virtual_attractor_publisher.publish(virtual_attractor);
-    naptime.sleep();
 
     // End of program
 }

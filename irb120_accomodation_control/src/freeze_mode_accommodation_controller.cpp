@@ -314,7 +314,7 @@ int main(int argc, char **argv) {
 	ros::ServiceServer freeze_service = nh.advertiseService("freeze_service",freezeServiceCallback);
 
 	// Set the freeze mode status to off. This does not toggle freeze mode. It's only for display purposes.
-	freeze_mode_status.data = 0; // or here make it frozen, and set the mode to be 1 by default
+	freeze_mode_status.data = 1; // or here make it frozen, and set the mode to be 1 by default
 	
 	// MATH: Instantiate an object of the custom forward kinematics solver class for our ABB IRB 120 robot
 	Irb120_fwd_solver irb120_fwd_solver;
@@ -459,7 +459,7 @@ int main(int argc, char **argv) {
 
 	// Define the freeze/latch_mode variables
 	bool first_loop_after_freeze = true;
-	// freeze_mode = true;  // here set freeze mode to be true, always start in freeze mode
+	freeze_mode = true;  // here set freeze mode to be true, always start in freeze mode
 
 	// store the current joint states as the frozen joints before entering the loop
 	for(int i = 0; i < 6; i++) frozen_joint_states_(i) = joint_states_(i);

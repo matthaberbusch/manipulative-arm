@@ -32,3 +32,20 @@ If not affirmative, exit.
 
 Service calls tot he buffer from the accomodation controller for the buffer output. Otherwise all can just be service call buttons and no skills made themselves
 
+
+TODO:
+Calculate the task plane from 3 points and generate and store a pose: (position + orientation)
+ - The services have been created, just need to implement the math for calculating the plane and the data reception for all 3 services being output (for the user to see and know how to proceed)
+
+Cutting on uneven and non-level surfaces
+ - Make sure to pull down, maybe tie in forces felt (ft-wrench?) and convert to tool or task frame for the math instead of robot frame? 
+ - Make sure it works well with vertical movement, i.e. forces will increase from below when moving up, decrease when moving down a slope
+ - Have the force threshold be high vertically, or make it more compliant to vertical movement somehow: i.e. changing the variables for the damping/control law: k_virt and b_virt
+ - Lots of testing to be done to make sure that this works
+
+ --- How would it cut on a material with holes in it that the mylar is covering? i.e. a metal plate that is flat, then curved, then has holes and parts cut out, would they use softer materials?
+     Put this underneath the mylar itself before cutting
+
+Cut out a "door" 3 of 4 parts of a rectangle and then open the door with the tool/blade
+ - Improve the cutting rotation around the z axis of the skill frame, pull down harder during so that the tool does not move
+ - 

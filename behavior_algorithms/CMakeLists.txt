@@ -150,11 +150,14 @@ add_executable(orientation_targeting_with_torque_limiting src/orientation_target
 add_executable(orientation_targeting_effort_limiting_x src/orientation_targeting_effort_limiting_x.cpp)
 add_executable(orientation_targeting_effort_limiting_y src/orientation_targeting_effort_limiting_y.cpp)
 add_executable(orientation_targeting_effort_limiting_z src/orientation_targeting_effort_limiting_z.cpp)
+add_executable(compliant_cutting src/compliant_cutting.cpp)
 add_executable(force_moment_accommodation src/force_moment_accommodation.cpp)
 add_executable(translational_wiggle_push src/translational_wiggle_push.cpp)
 add_executable(torsional_wiggle_push src/torsional_wiggle_push.cpp)
 add_executable(translational_wiggle_pull src/translational_wiggle_pull.cpp)
 add_executable(torsional_wiggle_pull src/torsional_wiggle_pull.cpp)
+
+add_executable(freeze_position_targeting_effort_limiting_z src/freeze_position_targeting_effort_limiting_z.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -209,6 +212,9 @@ target_link_libraries(quat_to_euler_ang_converter
    target_link_libraries(orientation_targeting_effort_limiting_z
    ${catkin_LIBRARIES}
  )
+    target_link_libraries(compliant_cutting
+   ${catkin_LIBRARIES}
+ )
     target_link_libraries(force_moment_accommodation
    ${catkin_LIBRARIES}
  )
@@ -222,6 +228,9 @@ target_link_libraries(quat_to_euler_ang_converter
    ${catkin_LIBRARIES}
  )
      target_link_libraries(torsional_wiggle_pull
+   ${catkin_LIBRARIES}
+ )
+     target_link_libraries(freeze_position_targeting_effort_limiting_z
    ${catkin_LIBRARIES}
  )
 #############

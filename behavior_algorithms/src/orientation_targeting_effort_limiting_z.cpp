@@ -71,8 +71,8 @@ int main(int argc, char** argv) {
     Params not needed to be tuned: 
     DT: Loop rate, how fast each iteration of the loop is (most likely not needed to be changed)
     TARGET_ORIENTATION: will change with user input, how far and in what direction the end effector moves
-    *///                                                                      was  0.1
-    double DT = 0.01, TORQUE_THRESHOLD = 0.4, FORCE_THRESHOLD = 15, ROTATE_ANGLE = 0.15, KEEP_CONTACT_ANGLE = 0.1, TARGET_ORIENTATION = 0.05; // Do not increase the virtual attractor angle greater than 1.55 radians
+    *///                                                    was 15            was  0.1
+    double DT = 0.01, TORQUE_THRESHOLD = 0.4, FORCE_THRESHOLD = 17, ROTATE_ANGLE = 0.15, KEEP_CONTACT_ANGLE = 0.1, TARGET_ORIENTATION = 0.05; // Do not increase the virtual attractor angle greater than 1.55 radians
     double KEEP_CONTACT_DISTANCE = 0.015, ROTATION_ERROR_THRESHOLD = 0.03; // 0.045; using .isApprox() it was stopping at 0.09         // was 0.02, then did not stop when it hit 0.0399
     double RUN_TIME = 60;
     double total_number_of_loops = RUN_TIME / DT;

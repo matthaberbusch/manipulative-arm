@@ -173,6 +173,8 @@ add_executable(accommodation_controller_restricted_position src/accommodation_co
 add_executable(accommodation_controller_with_bumpless_transitions src/accommodation_controller_with_bumpless_transitions.cpp)
 add_executable(buffer src/buffer.cpp)
 
+add_executable(freeze_mode_accommodation_controller src/freeze_mode_accommodation_controller.cpp)
+
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -306,6 +308,11 @@ target_link_libraries(accommodation_controller_restricted_position
   irb120_fk_ik
  )
   target_link_libraries(buffer
+  ${catkin_LIBRARIES}
+  irb120_accomodation_control
+  irb120_fk_ik
+ )
+target_link_libraries(freeze_mode_accommodation_controller
   ${catkin_LIBRARIES}
   irb120_accomodation_control
   irb120_fk_ik

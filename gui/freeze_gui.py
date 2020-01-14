@@ -730,7 +730,7 @@ class Application(tk.Frame):
         # print("Here, i run a command using os, skill 2")
 
         command = \
-            'rosrun behavior_algorithms position_targeting_effort_limiting_z'
+            'rosrun behavior_algorithms freeze_position_targeting_effort_limiting_z'
         target_distance = self.parse_entry()
         if target_distance != 0:
             command = command + ' _target_distance:=%f' \
@@ -740,23 +740,23 @@ class Application(tk.Frame):
         command = command + ' _param_set:=' + self.parameter_set.get()
         time.sleep(delay_len)
         # add this in before, so that the system is in compliant mode
-        # os.system('rosservice call /freeze_service')
+        os.system('rosservice call /freeze_service')
         os.system(command)  
         time.sleep(delay_len)
 
     def position_targ_effort_limit_pre_1_z(self):
         time.sleep(delay_len)
         # add this in before, so that the system is in compliant mode
-        # os.system('rosservice call /freeze_service')
-        command = 'rosrun behavior_algorithms position_targeting_effort_limiting_z _target_distance:=0.03 _param_set:=' + self.parameter_set.get()
+        os.system('rosservice call /freeze_service')
+        command = 'rosrun behavior_algorithms freeze_position_targeting_effort_limiting_z _target_distance:=0.03 _param_set:=' + self.parameter_set.get()
         os.system(command)  
         time.sleep(delay_len)
 
     def position_targ_effort_limit_pre_2_z(self):
         time.sleep(delay_len)
         # add this in before, so that the system is in compliant mode
-        # os.system('rosservice call /freeze_service')
-        command = 'rosrun behavior_algorithms position_targeting_effort_limiting_z _target_distance:=-0.03 _param_set:=' + self.parameter_set.get()
+        os.system('rosservice call /freeze_service')
+        command = 'rosrun behavior_algorithms freeze_position_targeting_effort_limiting_z _target_distance:=-0.03 _param_set:=' + self.parameter_set.get()
         os.system(command)
         time.sleep(delay_len)
 

@@ -11,7 +11,7 @@
 #include <behavior_algorithms/status_service.h> // service message for completion, maybe have the buffer be the client, but that would require skill to be running always
 
 
-int BUFFER_SIZE = 400; // 100 Hz for 4 seconds
+int BUFFER_SIZE = 200; // 100 Hz for 2 seconds
 bool jnt_state_update = false;
 int write_counter = 0;
 int read_counter = 1;
