@@ -27,6 +27,12 @@ geometry_msgs::Wrench ft_in_robot_frame;
 
 geometry_msgs::PoseStamped task_frame;
 
+geometry_msgs::Vector3 task_vector_z;
+
+void task_vector_z_callback(const geometry_msgs::Vector3& task_vector_msg_z) {
+    task_vector_z = task_vector_msg_z;
+}
+
 // ROS: callback functions for how we receive data
 void cartesian_state_callback(const geometry_msgs::PoseStamped& cartesian_pose) {
     current_pose = cartesian_pose.pose;
@@ -49,6 +55,7 @@ int main(int argc, char** argv) {
     ros::Subscriber cartesian_state_subscriber = nh.subscribe("cartesian_logger",1, cartesian_state_callback); // subscribe to the topic publishing the cartesian state of the end effector
     ros::Subscriber ft_subscriber = nh.subscribe("transformed_ft_wrench",1,ft_callback);                       // subscribe to the force/torque sensor data
     ros::Subscriber task_frame_sub = nh.subscribe("task_frame",1,task_frame_callback);                         // subscribe to the task frame published by the accomodation controller
+    ros::Subscriber task_vector_sub_z = nh.subscribe("task_vector_z",1,task_vector_z_callback);                // subscribe to the value of the task vector in the z, published from the accomodation controller
     ros::Publisher virtual_attractor_publisher = nh.advertise<geometry_msgs::PoseStamped>("Virt_attr_pose",1); // publish the pose of the virtual attractor for the accomodation controller 
 
     // ROS: Services used in conjunction with buffer.cpp to have delayed program status sent to operator
@@ -129,7 +136,7 @@ int main(int argc, char** argv) {
     }
     else if (!strcmp(param_set.c_str(), "Cutting")){
         // set the other values here
-        KEEP_CONTACT_DISTANCE = 0;
+        KEEP_CONTACT_DISTANCE = 0.0012; // used in a similar manner to keep cutting distance, so that the tool does not move upward when it is trying to cut
         cutting = true;
         ROS_INFO("Params set for CUTTING");
     }
@@ -287,7 +294,16 @@ int main(int argc, char** argv) {
         current_pose_quat.w() = current_pose.orientation.w;
 
         // Keep the robot pressing down
-        virtual_attractor.pose.position.x = current_pose.position.x + KEEP_CONTACT_DISTANCE; //TODO: update it to use vectors to pull downward, for use with peg and bottle cap
+        if(!cutting){
+            virtual_attractor.pose.position.x = current_pose.position.x + KEEP_CONTACT_DISTANCE; //TODO: update it to use vectors to pull downward, for use with peg and bottle cap
+        }
+        else{
+            virtual_attractor.pose.position.x = current_pose.position.x + task_vector_z.x * KEEP_CONTACT_DISTANCE;
+            virtual_attractor.pose.position.y = current_pose.position.y + task_vector_z.y * KEEP_CONTACT_DISTANCE;
+            virtual_attractor.pose.position.z = current_pose.position.z + task_vector_z.z * KEEP_CONTACT_DISTANCE;
+        }
+        // maybe change above to be in the task frame pulling down? 
+
 
         // Convert current pose quaternion to Euler Angles TODO check?
         current_pose_rot = current_pose_quat.normalized().toRotationMatrix();

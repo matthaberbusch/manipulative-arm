@@ -30,7 +30,7 @@ Skill for setting the new task frame:
 update the value of the task frame in the accomodation controller appropriately using the 3 approved points by calling the set task frame service call
 If not affirmative, exit. 
 
-Service calls tot he buffer from the accomodation controller for the buffer output. Otherwise all can just be service call buttons and no skills made themselves
+Service calls to the buffer from the accomodation controller for the buffer output. Otherwise all can just be service call buttons and no skills made themselves
 
 
 TODO:
@@ -49,3 +49,15 @@ Cutting on uneven and non-level surfaces
 Cut out a "door" 3 of 4 parts of a rectangle and then open the door with the tool/blade
  - Improve the cutting rotation around the z axis of the skill frame, pull down harder during so that the tool does not move
  - 
+
+
+
+---- New TODO Post NASA ----
+
+Update code to allow for PTWL to follow preplanned trajectory
+
+Make sure that the math works
+
+Move repo to a separate account and make it private
+
+
